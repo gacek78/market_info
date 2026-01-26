@@ -1,6 +1,5 @@
 # Market Info - Deployment na NAS (OMV)
 
-## 🔄 portów
 
 ### Porty (zmienione na: 3001 i 81)
 
