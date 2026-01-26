@@ -1,0 +1,7 @@
+{
+  "name": "Copy of Copy of Copy of Market Sentyment 2.0",
+  "description": "Zaawansowany system monitorowania rynków dla inwestorów IKE w XTB. Analizuje anomalie rynkowe oraz sygnały od kluczowych influencerów finansowych przy użyciu AI.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
