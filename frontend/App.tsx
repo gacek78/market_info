@@ -1,10 +1,13 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { TRACKED_ETFS, INFLUENCERS } from './constants';
 import { ETF, MarketSignal, GlobalMacroData, Influencer } from './types';
 import { MarketCard } from './components/MarketCard';
 import { SignalItem } from './components/SignalItem';
-import { fetchMarketIntelligence, validateAndFetchTickerDetails } from './services/geminiService';
+import { fetchMarketIntelligence, validateAndFetchTickerDetails } from '../backend/geminiService';
+import { 
+  getEtfsOnServer, saveEtfOnServer, deleteEtfOnServer,
+  getInfluencersOnServer, saveInfluencerOnServer, deleteInfluencerOnServer, resetInfluencersOnServer
+} from '../backend/stateManager';
 
 declare global {
   interface AIStudio {
@@ -12,31 +15,19 @@ declare global {
     openSelectKey: () => Promise<void>;
   }
   interface Window {
-    // Removed readonly modifier to ensure consistency across all declarations of Window.aistudio
+    // Removed readonly modifier to fix declaration conflict across files
     aistudio: AIStudio;
   }
 }
 
-const STORAGE_KEY_ETFS = 'xtb_sentinel_etfs';
-const STORAGE_KEY_INFLUENCERS = 'xtb_sentinel_influencers';
-
 const App: React.FC = () => {
-  // Stan ETFów
-  const [etfs, setEtfs] = useState<ETF[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_ETFS);
-    return saved ? JSON.parse(saved) : TRACKED_ETFS;
-  });
-
-  // Stan Influencerów
-  const [influencers, setInfluencers] = useState<Influencer[]>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY_INFLUENCERS);
-    return saved ? JSON.parse(saved) : INFLUENCERS;
-  });
-
+  const [etfs, setEtfs] = useState<ETF[]>([]);
+  const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [selectedEtf, setSelectedEtf] = useState<ETF | 'GLOBAL'>('GLOBAL');
   const [signals, setSignals] = useState<MarketSignal[]>([]);
   const [globalData, setGlobalData] = useState<GlobalMacroData | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
+  const [initialLoading, setInitialLoading] = useState<boolean>(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
   const [isAuthRequired, setIsAuthRequired] = useState<boolean>(false);
 
@@ -44,37 +35,30 @@ const App: React.FC = () => {
   const [tickerInput, setTickerInput] = useState('');
   const [verifying, setVerifying] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
-  
   const [infName, setInfName] = useState('');
   const [infHandle, setInfHandle] = useState('');
-  const [showInfAdd, setShowInfAdd] = useState(false);
+  const [showInfForm, setShowInfForm] = useState(false);
 
-  // Persystencja
+  // POBIERANIE DANYCH Z SERWERA NA START
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_ETFS, JSON.stringify(etfs));
-  }, [etfs]);
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY_INFLUENCERS, JSON.stringify(influencers));
-  }, [influencers]);
-
-  const handleRefresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await fetchMarketIntelligence(selectedEtf, influencers);
-      setSignals(result.signals);
-      if (result.globalData) setGlobalData(result.globalData);
-      setLastUpdate(new Date());
-      setIsAuthRequired(false);
-    } catch (error: any) {
-      if (error.message === 'AUTH_REQUIRED') {
-        setIsAuthRequired(true);
+    const initData = async () => {
+      try {
+        const [serverEtfs, serverInfs] = await Promise.all([
+          getEtfsOnServer(),
+          getInfluencersOnServer()
+        ]);
+        setEtfs(serverEtfs);
+        setInfluencers(serverInfs);
+      } catch (err) {
+        console.error("Failed to load server data", err);
+      } finally {
+        setInitialLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedEtf, influencers]);
+    };
+    initData();
+  }, []);
 
+  // MANDATORY: Check for API Key selection on mount as per Gemini Pro requirements
   useEffect(() => {
     const checkAuth = async () => {
       if (window.aistudio) {
@@ -85,58 +69,97 @@ const App: React.FC = () => {
     checkAuth();
   }, []);
 
-  useEffect(() => {
-    if (!isAuthRequired) handleRefresh();
-  }, [selectedEtf, isAuthRequired, handleRefresh]);
+  const handleRefresh = useCallback(async () => {
+    if (initialLoading || isAuthRequired) return;
+    setLoading(true);
+    try {
+      const result = await fetchMarketIntelligence(selectedEtf, influencers);
+      setSignals(result.signals);
+      if (result.globalData) setGlobalData(result.globalData);
+      setLastUpdate(new Date());
+    } catch (error: any) {
+      if (error.message === 'AUTH_REQUIRED') setIsAuthRequired(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedEtf, influencers, initialLoading, isAuthRequired]);
 
+  useEffect(() => {
+    if (!isAuthRequired && !initialLoading) {
+      handleRefresh();
+    }
+  }, [selectedEtf, isAuthRequired, handleRefresh, initialLoading]);
+
+  // MANDATORY: Function to trigger API Key selection dialog
   const handleConnectKey = async () => {
     if (window.aistudio) {
-      // Trigger API key selection and assume success to avoid race conditions
       await window.aistudio.openSelectKey();
       setIsAuthRequired(false);
       handleRefresh();
     }
   };
 
+  // AKCJE SERWEROWE - ETFS
   const addTicker = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tickerInput) return;
     setVerifying(true);
-    const details = await validateAndFetchTickerDetails(tickerInput.toUpperCase());
-    if (details) {
-      setEtfs(prev => [...prev, details]);
-      setTickerInput('');
-      setShowAddForm(false);
-    } else {
-      alert("Błąd: Instrument niedostępny w IKE XTB.");
+    try {
+      const details = await validateAndFetchTickerDetails(tickerInput.toUpperCase());
+      if (details) {
+        await saveEtfOnServer(details);
+        setEtfs(prev => [...prev, details]);
+        setTickerInput('');
+        setShowAddForm(false);
+      } else {
+        alert("Instrument niedostępny w XTB IKE.");
+      }
+    } finally {
+      setVerifying(false);
     }
-    setVerifying(false);
   };
 
-  const deleteEtf = (ticker: string, e: React.MouseEvent) => {
+  const deleteEtf = async (ticker: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    await deleteEtfOnServer(ticker);
     setEtfs(prev => prev.filter(etf => etf.ticker !== ticker));
     if (typeof selectedEtf !== 'string' && selectedEtf.ticker === ticker) setSelectedEtf('GLOBAL');
   };
 
-  // Obsługa influencerów
-  const addInfluencer = (e: React.FormEvent) => {
+  // AKCJE SERWEROWE - INFLUENCERS
+  const addInfluencer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!infName || !infHandle) return;
-    setInfluencers(prev => [...prev, { name: infName, handle: infHandle, impact: 'Użytkownik' }]);
-    setInfName(''); setInfHandle(''); setShowInfAdd(false);
+    const newInf = { name: infName, handle: infHandle, impact: 'Monitorowany' };
+    await saveInfluencerOnServer(newInf);
+    setInfluencers(prev => [...prev, newInf]);
+    setInfName(''); setInfHandle(''); setShowInfForm(false);
   };
 
-  const deleteInfluencer = (handle: string) => {
-    setInfluencers(prev => prev.filter(i => i.handle !== handle));
+  const deleteInfluencer = async (handle: string) => {
+    await deleteInfluencerOnServer(handle);
+    setInfluencers(prev => prev.filter(inf => inf.handle !== handle));
   };
 
-  const resetToDefault = () => {
-    if (confirm("Resetuj listę osób do domyślnych?")) {
-      setInfluencers(INFLUENCERS);
+  const resetInfluencers = async () => {
+    if (confirm("Resetuj listę osób na serwerze do domyślnych?")) {
+      const defaults = await resetInfluencersOnServer();
+      setInfluencers(defaults);
     }
   };
 
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen bg-[#020617] flex items-center justify-center text-slate-200">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-slate-400 font-bold tracking-widest uppercase text-xs">Synchronizacja z serwerem...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // MANDATORY: Render auth selection screen if API key is not configured or fails
   if (isAuthRequired) {
     return (
       <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 text-center">
@@ -145,7 +168,7 @@ const App: React.FC = () => {
             <svg className="w-10 h-10 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
           </div>
           <h2 className="text-2xl font-bold text-white mb-4">Wymagana Autoryzacja</h2>
-          <p className="text-slate-400 text-sm mb-8">Połącz klucz API Google Cloud z aktywowanym bilingiem, aby korzystać z wyszukiwania rynkowego Gemini (ai.google.dev/gemini-api/docs/billing).</p>
+          <p className="text-slate-400 text-sm mb-8">Połącz klucz API Google Cloud z aktywowanym bilingiem, aby korzystać z Gemini 3 Pro Intelligence. (ai.google.dev/gemini-api/docs/billing)</p>
           <button onClick={handleConnectKey} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-blue-600/20">POŁĄCZ KLUCZ API</button>
         </div>
       </div>
@@ -154,14 +177,13 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-[#020617] text-slate-200">
-      
-      {/* LEWY PANEL: PORTFEL IKE */}
+      {/* LEWY PANEL: INSTRUMENTY */}
       <aside className="w-full lg:w-80 border-r border-slate-800/50 p-6 flex flex-col bg-slate-900/20">
         <div className="flex items-center gap-3 mb-10">
-          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/40 font-black text-white">S</div>
+          <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/40 font-black text-white">X</div>
           <div>
             <h1 className="font-bold text-lg leading-tight">Sentinel IKE</h1>
-            <p className="text-[10px] text-blue-400 uppercase font-black tracking-widest">XTB Intelligent Monitoring</p>
+            <p className="text-[10px] text-blue-400 uppercase font-black tracking-widest italic text-right">Cloud Persistent</p>
           </div>
         </div>
 
@@ -181,7 +203,7 @@ const App: React.FC = () => {
         </div>
 
         {showAddForm && (
-          <form onSubmit={addTicker} className="mb-6 p-1 animate-in slide-in-from-top-2">
+          <form onSubmit={addTicker} className="mb-6 animate-in slide-in-from-top-2">
             <div className="flex gap-2">
               <input 
                 autoFocus
@@ -190,14 +212,14 @@ const App: React.FC = () => {
                 value={tickerInput}
                 onChange={e => setTickerInput(e.target.value)}
               />
-              <button disabled={verifying} className="bg-blue-600 px-3 rounded-lg text-xs font-bold hover:bg-blue-500 transition-colors">
-                {verifying ? '...' : 'OK'}
+              <button disabled={verifying} className="bg-blue-600 px-3 rounded-lg text-xs font-bold">
+                {verifying ? '...' : 'Dodaj'}
               </button>
             </div>
           </form>
         )}
 
-        <div className="space-y-3 overflow-y-auto max-h-[50vh] lg:max-h-none pr-1">
+        <div className="space-y-3 overflow-y-auto pr-1">
           {etfs.map(etf => (
             <MarketCard 
               key={etf.ticker} 
@@ -222,10 +244,10 @@ const App: React.FC = () => {
                 {selectedEtf === 'GLOBAL' ? 'Macro' : selectedEtf.ticker}
               </span>
             </div>
-            <p className="text-slate-400 text-sm max-w-2xl leading-relaxed">
+            <p className="text-slate-400 text-sm max-w-2xl leading-relaxed italic">
               {selectedEtf === 'GLOBAL' 
-                ? 'Skanowanie najważniejszych trendów walutowych i gospodarczych dla polskiego inwestora.' 
-                : `Głęboka analiza instrumentu ${selectedEtf.ticker}. AI monitoruje newsy, skład portfela i czynniki wzrostu.`}
+                ? 'Analiza głównych silników rynkowych (waluty, stopy, inflacja).' 
+                : `Analiza dedykowana: ${selectedEtf.ticker}. AI monitoruje sektor ${selectedEtf.category}.`}
             </p>
           </div>
           <button 
@@ -233,17 +255,17 @@ const App: React.FC = () => {
             disabled={loading} 
             className="bg-blue-600 hover:bg-blue-500 text-white font-bold px-8 py-4 rounded-2xl shadow-xl transition-all active:scale-95 disabled:opacity-50 uppercase tracking-widest text-xs"
           >
-            {loading ? 'Analizuję rynek...' : 'Skanuj Teraz'}
+            {loading ? 'Generowanie Raportu...' : 'Odśwież Dane'}
           </button>
         </header>
 
         <section className="space-y-10">
           {selectedEtf === 'GLOBAL' && globalData && (
-            <div className="bg-slate-900 border border-slate-800 rounded-[32px] overflow-hidden shadow-2xl border-b-4 border-b-blue-600">
+            <div className="bg-slate-900 border border-slate-800 rounded-[32px] overflow-hidden shadow-2xl border-b-4 border-b-blue-600 animate-in fade-in zoom-in duration-500">
               <div className="p-8">
                 <div className="flex items-center gap-3 mb-8">
                   <div className="w-1.5 h-6 bg-blue-500 rounded-full"></div>
-                  <h3 className="text-xs font-black text-blue-400 uppercase tracking-[0.3em]">Aktualne Wskaźniki Makro</h3>
+                  <h3 className="text-xs font-black text-blue-400 uppercase tracking-[0.3em]">Status Rynku (GLOBAL)</h3>
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
                   <div>
@@ -252,17 +274,17 @@ const App: React.FC = () => {
                     <div className="text-xl font-mono font-bold text-white">{globalData.eurPln} <span className="text-[10px] opacity-40">EUR</span></div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Inflacja (CPI)</span>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Inflacja</span>
                     <div className="text-xl font-mono font-bold text-red-400">{globalData.cpiPl} <span className="text-[10px] opacity-40">PL</span></div>
                     <div className="text-xl font-mono font-bold text-red-400">{globalData.cpiUs} <span className="text-[10px] opacity-40">US</span></div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Stopy Procentowe</span>
-                    <div className="text-xl font-mono font-bold text-blue-400">{globalData.ratesPl} <span className="text-[10px] opacity-40">NBP</span></div>
-                    <div className="text-xl font-mono font-bold text-blue-400">{globalData.ratesUs} <span className="text-[10px] opacity-40">FED</span></div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Stopy (NBP/FED)</span>
+                    <div className="text-xl font-mono font-bold text-blue-400">{globalData.ratesPl}</div>
+                    <div className="text-xl font-mono font-bold text-blue-400">{globalData.ratesUs}</div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">VIX (Risk)</span>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Risk (VIX)</span>
                     <div className="text-xl font-mono font-bold text-amber-500">{globalData.vix}</div>
                   </div>
                 </div>
@@ -271,10 +293,11 @@ const App: React.FC = () => {
           )}
 
           {typeof selectedEtf !== 'string' && (
-            <div className="p-8 bg-slate-900 border border-slate-800 rounded-[32px] shadow-xl border-l-4 border-l-blue-600">
-               <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">Strategia dla {selectedEtf.ticker}</h4>
-               <p className="text-slate-300 text-sm leading-relaxed italic">
-                 Analizujemy bezpośredni wpływ globalnych newsów na ten konkretny ETF. Szukamy korelacji między wypowiedziami ekspertów a sentymentem dla sektora {selectedEtf.category}.
+            <div className="p-8 bg-blue-900/10 border border-blue-500/20 rounded-[32px] shadow-xl border-l-8 border-l-blue-600 animate-in slide-in-from-left-4">
+               <h4 className="text-xs font-black text-blue-400 uppercase tracking-widest mb-2 underline decoration-blue-500/50 underline-offset-4">Ticker Insights: {selectedEtf.ticker}</h4>
+               <p className="text-slate-300 text-sm leading-relaxed">
+                 Analiza sektorowa dla <span className="text-blue-400 font-bold">{selectedEtf.category}</span>.
+                 Sygnały są filtrowane pod kątem korelacji z ceną tego aktywa.
                </p>
             </div>
           )}
@@ -282,58 +305,85 @@ const App: React.FC = () => {
           <div className="space-y-6">
             <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></span>
-              Sygnały Inteligentne
+              Intelligence Stream
             </h3>
             {signals.length > 0 ? (
               signals.map(s => <SignalItem key={s.id} signal={s} />)
             ) : !loading && (
-              <div className="text-center py-24 bg-slate-900/10 rounded-[40px] border-2 border-dashed border-slate-800/50 text-slate-600 font-medium">
-                Pobierz aktualne dane, klikając "Skanuj Teraz".
+              <div className="text-center py-20 bg-slate-900/20 rounded-[40px] border-2 border-dashed border-slate-800/50 text-slate-600 text-sm">
+                Brak nowych sygnałów. Kliknij przycisk odświeżania.
               </div>
             )}
           </div>
         </section>
       </main>
 
-      {/* PRAWY PANEL: KONTEKST SPOŁECZNY (X) */}
-      <aside className="w-full lg:w-80 border-l border-slate-800/50 p-6 bg-slate-900/10 flex flex-col gap-8">
+      {/* PRAWY PANEL: RADAR I INFLUENCERZY */}
+      <aside className="w-full lg:w-80 border-l border-slate-800/50 p-6 bg-slate-900/10 flex flex-col gap-8 overflow-y-auto">
+        
+        {/* SENTYMENT RYNKOWY */}
+        <div className="p-6 bg-blue-900/10 border border-blue-500/20 rounded-3xl shadow-lg animate-in slide-in-from-right-4">
+          <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-6">Radar Sentymentu</h4>
+          <div className="space-y-6">
+            <div>
+              <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
+                <span>Byki (Greed)</span>
+                <span>{globalData?.sentiment || 50}%</span>
+              </div>
+              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-full bg-green-500 transition-all duration-1000" style={{ width: `${globalData?.sentiment || 50}%` }} />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
+                <span>Niedźwiedzie (Fear)</span>
+                <span>{globalData?.risk || 50}%</span>
+              </div>
+              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-full bg-red-500 transition-all duration-1000" style={{ width: `${globalData?.risk || 50}%` }} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RADAR SPOŁECZNY (INFLUENCERZY) */}
         <div className="p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-xl">
           <div className="flex justify-between items-center mb-6">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Obserwowani (X)</h4>
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Radar Społeczny (X)</h4>
             <div className="flex gap-2">
-               <button onClick={() => setShowInfAdd(!showInfAdd)} className="text-blue-400 hover:text-white transition-colors" title="Dodaj osobę">+</button>
-               <button onClick={resetToDefault} className="text-slate-600 hover:text-red-400 transition-colors" title="Resetuj">
+               <button onClick={() => setShowInfForm(!showInfForm)} className="text-blue-400 hover:text-white" title="Dodaj osobę">+</button>
+               <button onClick={resetInfluencers} className="text-slate-600 hover:text-red-400" title="Resetuj na serwerze">
                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"/></svg>
                </button>
             </div>
           </div>
 
-          {showInfAdd && (
+          {showInfForm && (
             <form onSubmit={addInfluencer} className="mb-6 p-4 bg-slate-800 border border-slate-700 rounded-2xl animate-in slide-in-from-top-1">
               <input 
-                placeholder="Imię / Nazwa" 
+                placeholder="Imię" 
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-[10px] mb-2 focus:border-blue-500 outline-none"
                 value={infName} onChange={e => setInfName(e.target.value)}
               />
               <input 
-                placeholder="@handle lub rola" 
+                placeholder="@handle" 
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-[10px] mb-3 focus:border-blue-500 outline-none"
                 value={infHandle} onChange={e => setInfHandle(e.target.value)}
               />
-              <button className="w-full bg-blue-600 py-2 rounded-lg text-[10px] font-bold">Dodaj do radaru</button>
+              <button className="w-full bg-blue-600 py-2 rounded-lg text-[10px] font-bold">Zapisz na serwerze</button>
             </form>
           )}
-          
-          <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+
+          <div className="space-y-4 max-h-[35vh] overflow-y-auto pr-2">
             {influencers.map(inf => (
               <div key={inf.handle} className="group flex items-center justify-between gap-3 p-2 hover:bg-slate-800/40 rounded-xl transition-all">
                 <div className="flex items-center gap-3">
                   <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold text-blue-400">
                     {inf.name[0]}
                   </div>
-                  <div>
-                    <div className="text-[10px] font-bold text-slate-300">{inf.name}</div>
-                    <div className="text-[8px] text-slate-500">{inf.handle}</div>
+                  <div className="overflow-hidden">
+                    <div className="text-[10px] font-bold text-slate-300 truncate">{inf.name}</div>
+                    <div className="text-[8px] text-slate-500 truncate">{inf.handle}</div>
                   </div>
                 </div>
                 <button 
@@ -347,43 +397,19 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="p-6 bg-blue-900/10 border border-blue-500/20 rounded-3xl shadow-lg">
-          <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">Radar Sentymentu</h4>
-          <div className="space-y-6">
-            <div>
-              <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase mb-2">
-                <span>Byczy (Greed)</span>
-                <span>{globalData?.sentiment || 50}%</span>
-              </div>
-              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div className="h-full bg-green-500 transition-all duration-1000" style={{ width: `${globalData?.sentiment || 50}%` }} />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-[10px] font-bold text-slate-400 uppercase mb-2">
-                <span>Ryzyko (Fear)</span>
-                <span>{globalData?.risk || 50}%</span>
-              </div>
-              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div className="h-full bg-red-500 transition-all duration-1000" style={{ width: `${globalData?.risk || 50}%` }} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-3xl">
-          <h4 className="text-[10px] font-black text-slate-500 uppercase mb-3">Zasada IKE</h4>
-          <p className="text-[10px] text-slate-400 leading-relaxed italic">"Podatki to największy koszt inwestora. Na IKE Twoje zyski pracują w całości na Twoją przyszłość. Ogranicz zbędne ruchy, śledź tylko fakty."</p>
+        <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-3xl opacity-60 mt-auto">
+          <h4 className="text-[10px] font-black text-slate-500 uppercase mb-2">IKE Rule #1</h4>
+          <p className="text-[10px] text-slate-400 italic">"Gdy wszyscy kupują w euforii, Sentinel ostrzega. Gdy krew się leje, Sentinel szuka okazji."</p>
         </div>
       </aside>
 
       <footer className="fixed bottom-0 left-0 right-0 h-10 bg-black/80 backdrop-blur-md border-t border-slate-800/50 flex items-center justify-between px-6 z-50">
         <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-          Wersja: Sentinel v2.5.0 • Powered by Gemini 3 Pro
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
+          Sentinel Engine v3.1 • Server Synced
         </div>
         <div className="text-[9px] font-bold text-slate-500 uppercase">
-          Czas serwerowy: {lastUpdate.toLocaleTimeString()}
+          Synced: {lastUpdate.toLocaleTimeString()}
         </div>
       </footer>
     </div>
