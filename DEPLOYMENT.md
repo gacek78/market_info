@@ -1,15 +1,6 @@
 # Market Info - Deployment na NAS (OMV)
 
-## 🔄 Zmiana nazwy i portów
-
-### Zmiana nazwy repozytorium (opcjonalnie)
-Jeśli chcesz zmienić nazwę z "kopia-kopiii-market" na "market-info":
-1. Na GitHub: Settings → Rename repository
-2. Lokalnie na NAS:
-   ```bash
-   cd /docker/compose
-   mv market_sentyment market_info
-   ```
+## 🔄 portów
 
 ### Porty (zmienione na: 3001 i 81)
 
