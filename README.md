@@ -1,5 +1,5 @@
 
-# Market Sentinel v2.0
+# Market info 
 
 Zaawansowany system monitorowania rynków z podziałem na warstwy logiczne.
 
