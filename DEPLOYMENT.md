@@ -83,10 +83,8 @@ EOF
 
 ⚠️ **WAŻNE**: Plik `.env` **nigdy** nie trafia na GitHub - jest w `.gitignore`
 
-### 3. Przygotowanie backend/Dockerfile
-
-Utwórz `backend/Dockerfile`:
-
+### 3. Przygotowanie backend/Dockerfile (w głównym katalogu)
+Utwórz `Dockerfile` w głównym katalogu:
 ```dockerfile
 FROM node:22-alpine
 WORKDIR /app
