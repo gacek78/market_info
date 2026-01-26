@@ -68,7 +68,7 @@ Na NAS-ie (via SSH):
 
 ```bash
 cd /docker/compose
-git clone https://github.com/gacek78/kopia-kopiii-market.git market_info
+git clone https://github.com/gacek78/market_info.git market_info
 cd market_info
 ```
 
