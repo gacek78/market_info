@@ -20,8 +20,7 @@ export interface ErrorResponse {
 }
 
 // Additional types for geminiService
-export interface ETF {
-  symbol: string;
+export interface ETFI {  symbol: string;
   name: string;
   sector: string;
 }
