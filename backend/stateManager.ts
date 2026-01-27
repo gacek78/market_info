@@ -1,6 +1,4 @@
 
-import { ETF, Influencer } from "../frontend/types";
-import { TRACKED_ETFS, INFLUENCERS } from "../frontend/constants";
 
 /**
  * MOCK SERVER DATABASE
