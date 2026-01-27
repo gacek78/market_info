@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { ETF, MarketSignal, GlobalMacroData, Influencer } from './types';
 import { MarketCard } from './components/MarketCard';
 import { SignalItem } from './components/SignalItem';
-import { fetchMarketIntelligence, validateAndFetchTickerDetails } from '../backend/geminiService';
+import { fetchMarketIntelligence, validateAndFetchTickerDetails } from './services/apiService';
 import { 
   getEtfsOnServer, saveEtfOnServer, deleteEtfOnServer,
   getInfluencersOnServer, saveInfluencerOnServer, deleteInfluencerOnServer, resetInfluencersOnServer
