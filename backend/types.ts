@@ -18,3 +18,24 @@ export interface ErrorResponse {
   error: string;
   status: number;
 }
+
+// Additional types for geminiService
+export interface ETF {
+  symbol: string;
+  name: string;
+  sector: string;
+}
+
+export interface Influencer {
+  id: string;
+  name: string;
+  platform: string;
+}
+
+export interface MarketIntelligenceResponse {
+  summary: string;
+  trends: string[];
+  recommendations: string[];
+  risk_level: string;
+  signals?: string[]; // Optional for backwards compatibility
+}
