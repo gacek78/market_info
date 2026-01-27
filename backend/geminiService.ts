@@ -1,7 +1,6 @@
 
 import { GoogleGenAI } from "@google/genai";
-import { MarketSignal, ETF, Influencer, MarketIntelligenceResponse, GlobalMacroData } from "../frontend/types";
-
+import { MarketIntelligenceResponse, GlobalMarketData } from "./types";
 export const validateAndFetchTickerDetails = async (ticker: string): Promise<ETF | null> => {
   // Always create a new GoogleGenAI instance right before making an API call
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
