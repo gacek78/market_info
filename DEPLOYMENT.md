@@ -1,218 +1,194 @@
-# Market Info - Deployment na NAS (OMV)
+# Market Info - Wdrożenie na NAS (OMV)
 
+## Wymagania
 
-### Porty (zmienione na: 3001 i 81)
+- Docker
+- Docker Compose
+- Klucz API Google Gemini (z włączonym billingiem)
+- Minimum 2GB RAM dostępnej dla kontenerów
 
-**📍 GDZIE ZMIENIĆ PORTY I ZALEŻNOŚCI:**
+## Porty (zmieniane na: 3001 i 81)
 
-1. **docker-compose.yml** (root katalogu)
-   ```yaml
-   services:
-     market_info_backend:
-       ports:
-         - "3001:3000"   # HOST_PORT:CONTAINER_PORT
-     
-     market_info_frontend:
-       ports:
-         - "81:80"       # HOST_PORT:CONTAINER_PORT
-       environment:
-         - VITE_API_URL=http://market_info_backend:3001  # ⚠️ ZMIEŃ PORT!
-   ```
+⚠️ **WAŻNE ZMIANY PORTÓW I ZABEZPIECZEŃSTWA:**
 
-2. **App.tsx** (frontend/src)
-   ```typescript
-   // Zmień tylko jeśli masz custom baseURL
-   const API_BASE = import.meta.env.DEV 
-     ? 'http://localhost:3001'  // ⚠️ ZMIEŃ PORT tutaj
-     : '';
-   ```
+### 1. docker-compose.yml (w głównym katalogu)
 
-3. **backend/Dockerfile**
-   ```dockerfile
-   # EXPOSE port powinien się zgadzać z container port w compose
-   EXPOSE 3000  # Nie zmieniaj! (to wewnątrz kontenera)
-   ```
+```yaml
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "81:3001"  # Frontend dostępny na porcie 81
+    environment:
+      - NODE_ENV=production
+      - REACT_APP_API_URL=http://localhost:3001  # Backend API URL
+    volumes:
+      - ./frontend:/app/frontend
+      - /app/frontend/node_modules
+    depends_on:
+      - backend
 
-### Zależności między portami:
-
-```
-┌─────────────────────────────────┐
-│  HOST (NAS)                     │
-│                                 │
-│  Port 81 ──────> Frontend       │
-│           (Nginx, :80)          │
-│           (serves React)        │
-│                                 │
-│  Port 3001 ─> Backend           │
-│              (Express, :3000)   │
-│              (Gemini API)       │
-│                                 │
-│  Docker Network (internal):     │
-│  Frontend → localhost:3000 ❌   │
-│  Frontend → backend:3001 ✅     │
-└─────────────────────────────────┘
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}  # Przekazywany w runtime, NIE w pliku
+      - PORT=3001
+    ports:
+      - "3001:3001"  # Backend wewnętrzny
+    volumes:
+      - ./backend:/app/backend
 ```
 
-**⚠️ WAŻNE**: 
-- Frontend (React/Vite) **musi znać** port backendu
-- W `docker-compose.yml` ustawiasz HOST porty (81, 3001)
-- W kodzie App.tsx komunikujesz się poprzez **DNS wewnątrz Dockera** (`backend:3001`)
-- W `VITE_API_URL` MUSI być port backendu (3001 w `dev` mode, albo `` dla prod)
+### 2. Frontend (React/Vite)
 
-## Konfiguracja wstępna
+Frontend komunikuje z backendem poprzez HTTP API:
 
-### 1. Klonowanie repozytorium
+```typescript
+// frontend/services/apiService.ts
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
 
-Na NAS-ie (via SSH):
+// Wywoływane endpoint'y:
+// POST /api/market-intel
+// POST /api/validate-ticker
+```
+
+### 3. Backend (Express.js + Gemini API)
+
+- ✅ Backend bezpośrednio komunikuje się z Gemini API
+- ✅ Frontend wysyła żądania do backendu (nie do Gemini bezpośrednio)
+- ✅ **Brak .env pliku w Docker image** - klucz API jest bezpieczny
+- ✅ Dockerfile zawiera wieloetapową kompilację TypeScript
+
+## Architektura
+
+```
+HOST (NAS)
+├── PORT 81 ──→ Frontend (React/Vite)
+│   └── http://localhost:3001 ──→ Backend API
+├── PORT 3001 ──→ Backend (Express.js)
+│   └── Google Gemini API (bezpieczeństwo)
+└── Docker Network (internal)
+    ├── Frontend ←→ Backend
+    └── Backend ←→ Gemini API
+```
+
+## Instalacja i Uruchomienie
+
+### Krok 1: Klonowanie repozytorium
 
 ```bash
-cd /docker/compose
-git clone https://github.com/gacek78/market_info.git market_info
+git clone https://github.com/gacek78/market_info.git
 cd market_info
 ```
 
-### 2. Przygotowanie zmiennych środowiskowych
-
-Utwórz plik `.env` w głównym katalogu projektu:
+### Krok 2: Ustawienie zmiennej środowiskowej
 
 ```bash
-cat > .env << 'EOF'
-GEMINI_API_KEY=tu_wklej_swoj_klucz_API_od_gemini
-EOF
+# Bezpośrednio przed docker-compose:
+export GEMINI_API_KEY="your-api-key-here"
+
+# LUB: Utwórz plik .env (nie będzie commitowany):
+echo 'GEMINI_API_KEY=your-api-key-here' > .env
+
+# Następnie:
+set -a && source .env && set +a
 ```
 
-⚠️ **WAŻNE**: Plik `.env` **nigdy** nie trafia na GitHub - jest w `.gitignore`
-
-### 3. Przygotowanie backend/Dockerfile (w głównym katalogu)
-Utwórz `Dockerfile` w głównym katalogu:
-```dockerfile
-FROM node:22-alpine
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-EXPOSE 3000
-CMD ["npm", "start"]
-```
-
-### 4. Przygotowanie frontend/Dockerfile
-
-Jest już gotowy w root: `Dockerfile`
-
-## Deploy z Docker Compose
-
-### Budowanie i uruchamianie
+### Krok 3: Budowanie i uruchomienie
 
 ```bash
-cd /docker/compose/market_info
-docker compose up -d --build
+# Buduj obrazy Docker
+docker-compose build
+
+# Uruchom kontenery
+docker-compose up -d
 ```
 
-### Weryfikacja
+### Krok 4: Sprawdzenie statusu
 
 ```bash
-# Sprawdź status kontenerów
-docker compose ps
+# Wyświetl uruchomione kontenery
+docker-compose ps
 
 # Sprawdź logi backendu
-docker compose logs market_info_backend
+docker-compose logs backend
 
 # Sprawdź logi frontendu
-docker compose logs market_info_frontend
-
-# Test health check
-curl http://localhost:3001/health
+docker-compose logs frontend
 ```
 
-### Dostęp do aplikacji
+## Dostęp do aplikacji
 
-- **Frontend**: http://nas.local:81 (lub http://IP_NASIA:81)
-- **Backend API**: http://nas.local:3001 (lub http://IP_NASIA:3001)
-
-## Zarządzanie kontenerami
-
-### Zatrzymanie
-
-```bash
-cd /docker/compose/market_info
-docker compose down
-```
-
-### Restart
-
-```bash
-docker compose restart
-```
-
-### Aktualizacja z GitHub
-
-```bash
-git pull origin main
-docker compose up -d --build
-```
-
-## Zmiana portów post-deployment
-
-Jeśli chcesz zmienić porty już po wdrożeniu:
-
-1. **Edytuj `docker-compose.yml`** - zmień sekcję `ports`
-2. **Jeśli frontend:** zmień też `VITE_API_URL` w `environment`
-3. **Jeśli backend:** upewnij się że `EXPOSE` w Dockerfile się zgadza
-4. **Rebuilduj**: `docker compose up -d --build`
+- **Frontend**: http://nas-ip:81 (http://localhost:81 na lokalnym komputerze)
+- **Backend API**: http://nas-ip:3001/api/market-intel (do testowania)
+- **Health Check**: http://nas-ip:3001/health
 
 ## Troubleshooting
 
-### Backend zwraca 401 Unauthorized
-
-- Sprawdź czy `.env` ma poprawny `GEMINI_API_KEY`
-- Sprawdź logi: `docker compose logs market_info_backend`
-
-### Frontend nie łączy się z backend
-
-- Sprawdź czy `VITE_API_URL` w `docker-compose.yml` ma prawidłowy port
-- Sprawdź czy backend jest uruchomiony: `docker compose ps`
-- Sprawdź network: `docker network ls`
-- Test połączenia: `curl http://localhost:3001/health`
-
-### Port zajęty
-
-Jeśli port 3001 lub 81 jest zajęty:
+### Problem: Kontenery nie startują
 
 ```bash
-# Znajdź co korzysta z portu
-sudo lsof -i :3001
-sudo lsof -i :81
+# Sprawdź logi
+docker-compose logs
 
-# Zmień porty w docker-compose.yml
-# Np. zamiast 3001:3000 wpisz 3002:3000
+# Rebuild kontenerów
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
 ```
 
-### Czyszczenie
+### Problem: Frontend nie komunikuje się z backendem
+
+1. Sprawdź czy backend jest uruchomiony: `docker-compose ps`
+2. Zweryfikuj REACT_APP_API_URL w docker-compose.yml
+3. Sprawdź czy port 3001 jest dostępny
+
+### Problem: Błędy TypeScript w backendzie
 
 ```bash
-# Usunięcie kontenerów i sieci
-docker compose down
-
-# Usunięcie obrazów (rebuild przy następnym uruchomieniu)
-docker compose down --rmi all
-
-# Pełne czyszczenie (uwaga!)
+# Rebuild backendu z czyszczeniem cache
+docker-compose down
 docker system prune -a
+docker-compose build --no-cache backend
+docker-compose up -d
 ```
 
-## Integracja z OMV Web UI
+## Bezpieczeństwo
 
-Go to: Openmediavault → Services → Docker → Compose
+✅ **Co zostało zrobione:**
+- Klucz API Gemini NIE jest w docker image
+- Klucz jest przekazywany jako zmienna środowiskowa w runtime
+- Frontend nie ma bezpośredniego dostępu do Gemini API
+- Frontend komunikuje się z backendem poprzez HTTP
+- Backend obsługuje wszystkie żądania do Gemini API
 
-1. Click "Add" → New Project
-2. Project Name: `market_info`
-3. Path: `/docker/compose/market_info`
-4. Click Save
-5. Select project → Click "Up"
+⚠️ **Ważne:**
+- Nikdy nie commituj .env pliku do repozytorium
+- Zmień domyślne porty jeśli są zajęte na Twoim systemie
+- Użyj HTTPS w produkcji (reverse proxy)
 
-Abo z CLI w OMV:
+## Aktualizacja aplikacji
 
 ```bash
-sudo docker compose -f /docker/compose/market_info/docker-compose.yml up -d
+# Pobierz najnowszy kod
+git pull origin main
+
+# Rebuild kontenerów
+docker-compose down
+docker-compose build
+docker-compose up -d
+```
+
+## Wyłączanie aplikacji
+
+```bash
+# Zatrzymaj kontenery
+docker-compose down
+
+# Zatrzymaj i usuń volumeny (ostrzeżenie: spowoduje utratę danych)
+docker-compose down -v
 ```
