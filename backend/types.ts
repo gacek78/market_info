@@ -31,10 +31,4 @@ export interface Influencer {
   platform: string;
 }
 
-export interface MarketIntelligenceResponse {
-  summary: string;
-  trends: string[];
-  recommendations: string[];
-  risk_level: string;
-  signals?: string[]; // Optional for backwards compatibility
-}
+
