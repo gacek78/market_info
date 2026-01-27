@@ -1,3 +1,4 @@
+import { ETFI, Influencer } from './types';
 
 
 /**
@@ -6,9 +7,8 @@
  * Na potrzeby środowiska preview, dane są przechowywane w pamięci "serwera".
  */
 
-let serverEtfs: ETF[] = [...TRACKED_ETFS];
-let serverInfluencers: Influencer[] = [...INFLUENCERS];
-
+let serverETFs: ETFI[] = [];
+let serverInfluencers: Influencer[] = [];
 export const getEtfsOnServer = async (userId: string = 'guest'): Promise<ETF[]> => {
   // Symulacja opóźnienia sieciowego
   await new Promise(resolve => setTimeout(resolve, 300));
