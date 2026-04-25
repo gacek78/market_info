@@ -2,9 +2,8 @@ import { ETF, Influencer, MarketIntelligenceResponse, MarketSignal, SignalPriori
 import { CACHE_TTL_MS, TRUSTED_SOURCES } from '../constants';
 
 const API_BASE_URL =
-  typeof window !== 'undefined' && (window as any).__API_BASE
-    ? (window as any).__API_BASE
-    : import.meta.env.VITE_API_URL || 'http://localhost:3000';
+  import.meta.env.VITE_API_URL || 
+  (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3010` : 'http://localhost:3000');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Source credibility helper
