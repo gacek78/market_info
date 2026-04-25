@@ -7,6 +7,10 @@ export interface ETF {
 }
 
 export type SignalType = 'ANOMALY' | 'INFLUENCER' | 'NEWS' | 'THESIS' | 'MACRO';
+export type SignalPhase = 'fast' | 'deep';
+export type SignalPriority = 'DZIS' | 'TYDZIEN' | 'MIESIAC';
+export type SignalFilter = 'ALL' | 'DZIS' | 'TYDZIEN' | 'MIESIAC';
+export type LoadingPhase = 'fast' | 'deep' | null;
 
 export interface MarketSignal {
   id: string;
@@ -18,6 +22,17 @@ export interface MarketSignal {
   longTermImpact?: string;
   timestamp: Date;
   sources: { title: string; uri: string }[];
+  /** Faza AI ktora wygenerowala sygnal */
+  phase?: SignalPhase;
+  /** Obliczany priorytet dla filtrow */
+  priority?: SignalPriority;
+}
+
+export interface EconomicEvent {
+  date: string;
+  region: 'PL' | 'USA' | 'EU';
+  event: string;
+  impact: 'low' | 'medium' | 'high';
 }
 
 export interface Influencer {
@@ -29,6 +44,7 @@ export interface Influencer {
 export interface GlobalMacroData {
   usdPln: string;
   eurPln: string;
+  eurUsd: string;
   vix: string;
   cpiPl: string;
   ratesPl: string;
@@ -41,6 +57,11 @@ export interface GlobalMacroData {
 
 export interface MarketIntelligenceResponse {
   signals: MarketSignal[];
-  calendar: any[];
+  calendar: EconomicEvent[];
   globalData?: GlobalMacroData;
+}
+
+export interface CacheInfo {
+  timeLabel: string;
+  ageMs: number;
 }

@@ -1,34 +1,47 @@
-// Backend types - independent from frontend
+// Backend shared types - must stay in sync with frontend/types.ts
 
-export interface MarketIntelligenceResponse {
-  insight: string;
-  sentiment: 'bullish' | 'bearish' | 'neutral';
-  confidence: number;
-  factors: string[];
-}
-
-export interface GlobalMarketData {
-  index: string;
-  value: number;
-  change: number;
-  changePercent: number;
-}
-
-export interface ErrorResponse {
-  error: string;
-  status: number;
-}
-
-// Additional types for geminiService
-export interface ETFI {  symbol: string;
+export interface ETF {
+  ticker: string;
   name: string;
-  sector: string;
+  category: string;
+  description: string;
 }
 
 export interface Influencer {
-  id: string;
   name: string;
-  platform: string;
+  handle: string;
+  impact: string;
 }
 
+export interface MarketSignal {
+  id: string;
+  ticker: string;
+  type: 'ANOMALY' | 'INFLUENCER' | 'NEWS' | 'THESIS' | 'MACRO';
+  severity: 'low' | 'medium' | 'high';
+  title: string;
+  summary: string;
+  longTermImpact?: string;
+  timestamp: Date;
+  sources: { title: string; uri: string }[];
+  phase?: 'fast' | 'deep';
+}
 
+export interface GlobalMacroData {
+  usdPln: string;
+  eurPln: string;
+  eurUsd: string;
+  vix: string;
+  cpiPl: string;
+  ratesPl: string;
+  cpiUs: string;
+  ratesUs: string;
+  sentiment: number;
+  risk: number;
+  sources: { title: string; uri: string }[];
+}
+
+export interface MarketIntelligenceResponse {
+  signals: MarketSignal[];
+  calendar: any[];
+  globalData?: GlobalMacroData;
+}
