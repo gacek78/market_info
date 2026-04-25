@@ -24,6 +24,7 @@ export interface MarketSignal {
   timestamp: Date;
   sources: { title: string; uri: string }[];
   phase?: 'fast' | 'deep';
+  priority?: 'DZIS' | 'TYDZIEN' | 'MIESIAC';
 }
 
 export interface GlobalMacroData {

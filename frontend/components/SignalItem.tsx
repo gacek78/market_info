@@ -17,27 +17,37 @@ function getRelativeTime(date: Date): string {
   return `${diffD}d temu`;
 }
 
-function getCredibilityBadge(uri: string): JSX.Element {
+function getCredibilityBadge(uri: string, title?: string): JSX.Element {
   const cred = getSourceCredibility(uri);
-  const domain = (() => {
-    try { return new URL(uri).hostname.replace('www.', ''); } catch { return uri.slice(0, 20); }
-  })();
+  
+  let displayName = '';
+  try {
+    const url = new URL(uri);
+    displayName = url.hostname.replace('www.', '');
+    // If it's a vertexaisearch redirect, use the parsed title instead of the raw host
+    if (displayName.includes('vertexaisearch') && title && title !== 'Web Reference') {
+      displayName = title.length > 35 ? title.slice(0, 32) + '...' : title;
+    }
+  } catch {
+    displayName = title || uri.slice(0, 20);
+  }
+
   if (cred === 'high') return (
     <span title="Weryfikowane źródło" className="flex items-center gap-1 text-green-400">
       <span>✅</span>
-      <span>{domain.split('.')[0]}</span>
+      <span>{displayName}</span>
     </span>
   );
   if (cred === 'medium') return (
     <span title="Średnia wiarygodność" className="flex items-center gap-1 text-amber-400">
       <span>⚠️</span>
-      <span>{domain.split('.')[0]}</span>
+      <span>{displayName}</span>
     </span>
   );
   return (
     <span title="Źródło niezweryfikowane" className="flex items-center gap-1 text-slate-500">
       <span>❓</span>
-      <span>{domain.split('.')[0]}</span>
+      <span>{displayName}</span>
     </span>
   );
 }
@@ -120,7 +130,7 @@ export const SignalItem: React.FC<SignalItemProps> = ({ signal }) => {
               rel="noopener noreferrer"
               className="text-[9px] font-bold text-slate-400 hover:text-blue-400 flex items-center gap-1.5 bg-slate-900/80 hover:bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-700/50 transition-colors"
             >
-              {getCredibilityBadge(source.uri)}
+              {getCredibilityBadge(source.uri, source.title)}
             </a>
           ))}
         </div>

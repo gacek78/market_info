@@ -44,6 +44,7 @@ export const fetchMarketIntelligenceFast = async (
         {
           "type": "MACRO",
           "severity": "low",
+          "priority": "DZIS",
           "title": "Wstępna ocena",
           "summary": "Krótki opis na bazie wiedzy modelu",
           "longTermImpact": "Kontekst IKE"
@@ -68,6 +69,7 @@ export const fetchMarketIntelligenceFast = async (
         ticker: isGlobal ? 'GLOBAL' : (target as ETF).ticker,
         sources: [],
         phase: 'fast' as const,
+        priority: s.priority || 'DZIS',
       })),
       calendar: [],
       globalData: data.globalData ? { ...data.globalData, sources: [] } : undefined,
@@ -122,6 +124,7 @@ export const fetchMarketIntelligenceDeep = async (
         {
           "type": "NEWS",
           "severity": "medium",
+          "priority": "DZIS/TYDZIEN/MIESIAC",
           "title": "Tytuł sygnału",
           "summary": "Konkretny opis z datą/źródłem",
           "longTermImpact": "Dlaczego to ważne dla emerytalnego IKE"
@@ -155,6 +158,7 @@ export const fetchMarketIntelligenceDeep = async (
         ticker: isGlobal ? 'GLOBAL' : (target as ETF).ticker,
         sources: searchSources.slice(0, 3),
         phase: 'deep' as const,
+        priority: s.priority || 'DZIS',
       })),
       calendar: [],
       globalData: data.globalData ? { ...data.globalData, sources: searchSources.slice(0, 5) } : undefined,
