@@ -1,9 +1,14 @@
 import { ETF, Influencer, MarketIntelligenceResponse, MarketSignal, SignalPriority } from '../types';
 import { CACHE_TTL_MS, TRUSTED_SOURCES } from '../constants';
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || 
-  (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}:3010` : 'http://localhost:3000');
+const API_BASE_URL = (() => {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && !envUrl.includes('localhost')) return envUrl;
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.hostname}:3010`;
+  }
+  return 'http://localhost:3000';
+})();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Source credibility helper
