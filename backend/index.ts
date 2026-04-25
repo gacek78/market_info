@@ -64,13 +64,13 @@ app.post('/api/market-intel/deep', async (req: Request, res: Response) => {
 
 // ─── Legacy endpoint (backward compat) ──────────────────────────────────
 app.post('/api/market-intel', async (req: Request, res: Response) => {
-  // Forward to deep for backward compatibility
   const { ticker, marketType } = req.body;
   if (!ticker) return res.status(400).json({ error: 'Missing ticker' });
   if (!process.env.API_KEY) return res.status(401).json({ error: 'API key not configured' });
   try {
     const target = parseTarget(ticker, marketType);
-    const result = await fetchMarketIntelligenceDeep(target);
+    const influencers = await getInfluencersOnServer();
+    const result = await fetchMarketIntelligenceDeep(target, influencers);
     return res.json(result);
   } catch (error: any) {
     console.error('Legacy Intel Error:', error);
