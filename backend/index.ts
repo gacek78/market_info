@@ -65,8 +65,17 @@ app.post('/api/market-intel/deep', async (req: Request, res: Response) => {
 // ─── Legacy endpoint (backward compat) ──────────────────────────────────
 app.post('/api/market-intel', async (req: Request, res: Response) => {
   // Forward to deep for backward compatibility
-  req.url = '/api/market-intel/deep';
-  app.handle(req, res, () => {});
+  const { ticker, marketType } = req.body;
+  if (!ticker) return res.status(400).json({ error: 'Missing ticker' });
+  if (!process.env.API_KEY) return res.status(401).json({ error: 'API key not configured' });
+  try {
+    const target = parseTarget(ticker, marketType);
+    const result = await fetchMarketIntelligenceDeep(target);
+    return res.json(result);
+  } catch (error: any) {
+    console.error('Legacy Intel Error:', error);
+    return res.status(500).json({ error: 'Failed to analyze market' });
+  }
 });
 
 // ─── Validate ticker ───────────────────────────────────────────────────
@@ -131,7 +140,7 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(port, '0.0.0.0', () => {
+app.listen(Number(port), '0.0.0.0', () => {
   console.log(`Sentinel IKE Backend listening on 0.0.0.0:${port}`);
 });
 
