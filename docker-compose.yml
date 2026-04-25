@@ -18,7 +18,7 @@ services:
     environment:
       - API_KEY=${API_KEY}
     ports:
-      - "3001:3000"
+      - "3001:300"
     volumes:
       - ./backend:/app
       - /app/node_modules
