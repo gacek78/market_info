@@ -54,7 +54,7 @@ export const fetchMarketIntelligenceFast = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-preview-04-17',
+      model: 'gemini-2.5-flash',
       contents: prompt,
       config: { responseMimeType: 'application/json' },
     });
@@ -132,7 +132,7 @@ export const fetchMarketIntelligenceDeep = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-pro-preview-05-06',
+      model: 'gemini-2.5-pro',
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
@@ -189,7 +189,7 @@ export const validateAndFetchTickerDetails = async (ticker: string): Promise<ETF
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-preview-04-17',
+      model: 'gemini-2.5-flash',
       contents: prompt,
       config: { tools: [{ googleSearch: {} }], responseMimeType: 'application/json' },
     });
