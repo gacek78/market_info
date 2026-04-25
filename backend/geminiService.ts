@@ -1,9 +1,13 @@
-
 import { GoogleGenAI } from "@google/genai";
 import { MarketIntelligenceResponse } from "./types";
 import { ETF, Influencer } from "./types";
 
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY! });
+const getAI = () => {
+  if (!process.env.API_KEY) {
+    console.error('[GeminiService] ERROR: API_KEY is not set in environment!');
+  }
+  return new GoogleGenAI({ apiKey: process.env.API_KEY! });
+};
 
 // ─── FAST (Faza 1): Gemini Flash bez Google Search ───────────────────────────
 export const fetchMarketIntelligenceFast = async (
@@ -69,6 +73,7 @@ export const fetchMarketIntelligenceFast = async (
       globalData: data.globalData ? { ...data.globalData, sources: [] } : undefined,
     };
   } catch (error: any) {
+    console.error('Fast API Error:', error);
     if (
       error?.message?.includes('401') ||
       error?.message?.includes('UNAUTHENTICATED') ||
@@ -155,6 +160,7 @@ export const fetchMarketIntelligenceDeep = async (
       globalData: data.globalData ? { ...data.globalData, sources: searchSources.slice(0, 5) } : undefined,
     };
   } catch (error: any) {
+    console.error('Deep API Error:', error);
     if (
       error?.message?.includes('401') ||
       error?.message?.includes('UNAUTHENTICATED') ||
