@@ -6,7 +6,7 @@ services:
     ports:
       - "81:3000"
     environment:
-      - VITE_API_URL=http://localhost:3001
+      - VITE_API_URL=http://localhost:3010
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -18,7 +18,7 @@ services:
     environment:
       - API_KEY=${API_KEY}
     ports:
-      - "3001:300"
+      - "3010:3000"
     volumes:
       - ./backend:/app
       - /app/node_modules
