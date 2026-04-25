@@ -131,8 +131,8 @@ app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(port, () => {
-  console.log(`Sentinel IKE Backend running on port ${port}`);
+app.listen(port, '0.0.0.0', () => {
+  console.log(`Sentinel IKE Backend listening on 0.0.0.0:${port}`);
 });
 
 export default app;
