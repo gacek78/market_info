@@ -69,8 +69,10 @@ function formatSignal(s: MarketSignal): string {
   const tag = s.ticker && s.ticker !== 'GLOBAL' ? ` <i>(${escapeHtml(s.ticker)})</i>` : '';
   const body = escapeHtml(s.summary || '');
   const impact = s.longTermImpact ? `\n<i>IKE: ${escapeHtml(s.longTermImpact)}</i>` : '';
-  const src = s.sources?.[0]?.uri && s.sources[0].uri !== '#'
-    ? `\n🔗 ${escapeHtml(s.sources[0].uri)}`
+  // Klikalny tytuł źródła zamiast surowego (i często brzydkiego) URL-a.
+  const s0 = s.sources?.[0];
+  const src = s0?.uri && s0.uri !== '#'
+    ? `\n🔗 <a href="${escapeHtml(s0.uri)}">${escapeHtml(s0.title || 'Źródło')}</a>`
     : '';
   return `${head}${tag}\n${body}${impact}${src}`;
 }

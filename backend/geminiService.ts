@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { MarketIntelligenceResponse } from "./types";
 import { ETF, Influencer } from "./types";
 import { fetchMarketQuotes, fetchTickerPrice } from "./marketData";
+import { MODEL_FAST, MODEL_DEEP, MODEL_VALIDATE } from "./constants";
 
 const getAI = () => {
   if (!process.env.API_KEY) {
@@ -98,7 +99,7 @@ export const fetchMarketIntelligenceFast = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: MODEL_FAST,
       contents: prompt,
       config: { responseMimeType: 'application/json' },
     });
@@ -192,7 +193,7 @@ export const fetchMarketIntelligenceDeep = async (
     // UWAGA: googleSearch jest niekompatybilny z responseMimeType:'application/json'
     // — prosimy o tekst i sami wyciągamy JSON (extractJson).
     const response = await ai.models.generateContent({
-      model: 'gemini-3.1-pro-preview',
+      model: MODEL_DEEP,
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
@@ -255,7 +256,7 @@ export const validateAndFetchTickerDetails = async (ticker: string): Promise<ETF
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: MODEL_VALIDATE,
       contents: prompt,
       config: { tools: [{ googleSearch: {} }] },
     });

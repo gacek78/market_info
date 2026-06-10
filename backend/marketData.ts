@@ -80,6 +80,8 @@ export async function fetchTickerPrice(ticker: string): Promise<Quote | null> {
 
   if (t.endsWith('.l')) candidates.push(t.replace(/\.l$/, '.uk'));
   if (t.endsWith('.eu')) candidates.push(t.replace(/\.eu$/, ''));
+  // GPW na Stooq: 'dnp.pl' / 'xtb.pl' → spróbuj też bez sufiksu ('dnp', 'xtb').
+  if (t.endsWith('.pl')) candidates.push(t.replace(/\.pl$/, ''));
 
   for (const sym of candidates) {
     const q = await fetchStooqQuote(sym);
