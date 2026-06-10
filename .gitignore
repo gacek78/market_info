@@ -6,3 +6,6 @@ build/
 dist/
 .DS_Store
 *.log
+
+# Trwały stan backendu (ETF-y, influencerzy, historia alertów)
+backend/data/

@@ -1,6 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 import { MarketIntelligenceResponse } from "./types";
 import { ETF, Influencer } from "./types";
+import { fetchMarketQuotes, fetchTickerPrice } from "./marketData";
+import { MODEL_FAST, MODEL_DEEP, MODEL_VALIDATE } from "./constants";
 
 const getAI = () => {
   if (!process.env.API_KEY) {
@@ -8,6 +10,48 @@ const getAI = () => {
   }
   return new GoogleGenAI({ apiKey: process.env.API_KEY! });
 };
+
+/**
+ * Robustnie wyciąga obiekt JSON z odpowiedzi modelu.
+ *
+ * Gemini NIE pozwala łączyć `responseMimeType: 'application/json'` z narzędziem
+ * `googleSearch` — w fazie Deep musimy więc prosić o zwykły tekst i sami
+ * wydobyć JSON (model często opakowuje go w ```json ... ``` albo dokłada prozę).
+ */
+function extractJson<T = any>(raw: string | undefined | null): T | null {
+  if (!raw) return null;
+  let text = raw.trim();
+
+  // Zdejmij ogrodzenie ```json ... ``` lub ``` ... ```
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) text = fence[1].trim();
+
+  // Spróbuj sparsować całość; jeśli nie, wytnij pierwszy zbalansowany blok {...}
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+      try {
+        return JSON.parse(text.slice(start, end + 1)) as T;
+      } catch {
+        /* poniżej */
+      }
+    }
+  }
+  console.error('[GeminiService] Nie udało się sparsować JSON z odpowiedzi:', raw?.slice(0, 300));
+  return null;
+}
+
+function isAuthError(error: any): boolean {
+  const msg = error?.message ?? '';
+  return (
+    msg.includes('401') ||
+    msg.includes('UNAUTHENTICATED') ||
+    msg.includes('Requested entity was not found.')
+  );
+}
 
 // ─── FAST (Faza 1): Gemini Flash bez Google Search ───────────────────────────
 export const fetchMarketIntelligenceFast = async (
@@ -55,12 +99,13 @@ export const fetchMarketIntelligenceFast = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: MODEL_FAST,
       contents: prompt,
       config: { responseMimeType: 'application/json' },
     });
 
-    const data = JSON.parse(response.text!);
+    const data = extractJson<any>(response.text);
+    if (!data) return { signals: [], calendar: [] };
     return {
       signals: (data.signals || []).map((s: any) => ({
         ...s,
@@ -76,18 +121,12 @@ export const fetchMarketIntelligenceFast = async (
     };
   } catch (error: any) {
     console.error('Fast API Error:', error);
-    if (
-      error?.message?.includes('401') ||
-      error?.message?.includes('UNAUTHENTICATED') ||
-      error?.message?.includes('Requested entity was not found.')
-    ) {
-      throw new Error('AUTH_REQUIRED');
-    }
+    if (isAuthError(error)) throw new Error('AUTH_REQUIRED');
     return { signals: [], calendar: [] };
   }
 };
 
-// ─── DEEP (Faza 2): Gemini Pro + Google Search ────────────────────────────────
+// ─── DEEP (Faza 2): dwukrokowo — research z Google Search + strukturyzacja do JSON ──
 export const fetchMarketIntelligenceDeep = async (
   target: ETF | 'GLOBAL',
   influencers: Influencer[]
@@ -96,9 +135,25 @@ export const fetchMarketIntelligenceDeep = async (
   const isGlobal = target === 'GLOBAL';
   const influencersList = influencers.map((i) => `${i.name} (${i.handle})`).join(', ');
 
+  // ── Realne dane rynkowe (Stooq) — AI ma je interpretować, nie zgadywać ──
+  const quotes = await fetchMarketQuotes();
+  const tickerQuote = isGlobal ? null : await fetchTickerPrice((target as ETF).ticker);
+
+  const realDataBlock = `
+    TWARDE DANE RYNKOWE (źródło: Stooq, na dzień ${quotes.asOf ?? 'b.d.'}) — TRAKTUJ JE JAKO PRAWDĘ, NIE ZGADUJ:
+    - USD/PLN: ${quotes.usdPln}
+    - EUR/PLN: ${quotes.eurPln}
+    - EUR/USD: ${quotes.eurUsd}
+    - VIX: ${quotes.vix}${
+      tickerQuote
+        ? `\n    - Ostatnia cena ${(target as ETF).ticker}: ${tickerQuote.price} (z ${tickerQuote.date ?? 'b.d.'})`
+        : ''
+    }
+  `;
+
   const specificInstruction = isGlobal
     ? `ANALIZA MAKRO: Skup się na parach walutowych (USD/PLN, EUR/PLN), inflacji w Polsce i USA oraz ogólnym nastroju rynkowym.
-       Pobierz AKTUALNE dane przez Google Search.
+       Pobierz AKTUALNE newsy i kontekst przez Google Search (dane liczbowe walut/VIX masz już podane wyżej — użyj ich).
        Monitoruj wypowiedzi tych osób: ${influencersList}.`
     : `GŁĘBOKA ANALIZA INSTRUMENTU: ${(target as ETF).ticker} (${(target as ETF).name}).
        ZAKAZ: Nie podawaj ogólnych danych o inflacji w Polsce czy kursie EUR/PLN, chyba że mają KLUCZOWY wpływ na ten instrument.
@@ -108,47 +163,80 @@ export const fetchMarketIntelligenceDeep = async (
        3. Co te osoby mówią o tym aktywie lub sektorze: ${influencersList}.
        4. Wyniki finansowe największych spółek w tym ETF.`;
 
-  const prompt = `
+  // KROK 1 — RESEARCH: naturalny prompt + Google Search.
+  // WAŻNE: wymuszanie "zwróć JSON" wyłącza wyszukiwanie (model odpowiada z pamięci),
+  // dlatego research prosimy tekstem — wtedy grounding realnie działa i daje źródła.
+  const researchPrompt = `
     Działaj jako senior analityk portfela IKE.
+    ${realDataBlock}
     ${specificInstruction}
 
-    WYMAGANE: Wygeneruj 3-5 sygnałów z AKTUALNYMI danymi z internetu.
-    ZWRÓĆ WYŁĄCZNIE JSON:
-    {
-      "globalData": {
-        "usdPln": "wartość", "eurPln": "wartość", "eurUsd": "wartość", "vix": "wartość",
-        "cpiPl": "wartość", "ratesPl": "wartość", "cpiUs": "wartość", "ratesUs": "wartość",
-        "sentiment": 50, "risk": 50
-      },
-      "signals": [
-        {
-          "type": "NEWS",
-          "severity": "medium",
-          "priority": "DZIS/TYDZIEN/MIESIAC",
-          "title": "Tytuł sygnału",
-          "summary": "Konkretny opis z datą/źródłem",
-          "longTermImpact": "Dlaczego to ważne dla emerytalnego IKE"
-        }
-      ]
-    }
+    Przeszukaj internet (Google) i zbierz NAJNOWSZE, KONKRETNE informacje — każdy wątek
+    z datą, liczbą i wydarzeniem. Wypisz 3-5 najważniejszych, aktualnych tematów dla tego
+    instrumentu. Dla każdego: co się stało, kiedy, dlaczego to ważne dla długoterminowego IKE.
+    Pisz zwięźle, rzeczowo. Opieraj się WYŁĄCZNIE na znalezionych informacjach.
   `;
 
   try {
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-pro-preview',
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: 'application/json',
-      },
+    const research = await ai.models.generateContent({
+      model: MODEL_DEEP,
+      contents: researchPrompt,
+      config: { tools: [{ googleSearch: {} }] },
     });
 
-    const data = JSON.parse(response.text!);
+    const researchText = research.text ?? '';
     const searchSources =
-      response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
+      research.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
         title: chunk.web?.title || 'Web Reference',
         uri: chunk.web?.uri || '#',
       })) || [];
+
+    // KROK 2 — STRUKTURYZACJA: zamień research na czysty JSON (bez search → można JSON mode).
+    const structurePrompt = `
+      Na podstawie PONIŻSZEJ ANALIZY zamień ją na sygnały rynkowe. NIE dodawaj informacji
+      spoza analizy. Zachowaj konkrety (daty, liczby).
+
+      ANALIZA:
+      ${researchText}
+
+      ZWRÓĆ WYŁĄCZNIE JSON:
+      {
+        "globalData": {
+          "cpiPl": "wartość lub ND", "ratesPl": "wartość lub ND",
+          "cpiUs": "wartość lub ND", "ratesUs": "wartość lub ND",
+          "sentiment": 50, "risk": 50
+        },
+        "signals": [
+          {
+            "type": "NEWS",
+            "severity": "low|medium|high",
+            "priority": "DZIS|TYDZIEN|MIESIAC",
+            "title": "Tytuł sygnału",
+            "summary": "Konkretny opis z datą",
+            "longTermImpact": "Dlaczego to ważne dla emerytalnego IKE"
+          }
+        ]
+      }
+    `;
+
+    const structured = await ai.models.generateContent({
+      model: MODEL_DEEP,
+      contents: structurePrompt,
+      config: { responseMimeType: 'application/json' },
+    });
+
+    const data = extractJson<any>(structured.text);
+    if (!data) return { signals: [], calendar: [], globalData: { ...quotes, sources: searchSources.slice(0, 5) } as any };
+
+    // Realne kursy/VIX zawsze nadpisują to, co wymyśli model.
+    const mergedGlobal = {
+      ...(data.globalData || {}),
+      usdPln: quotes.usdPln,
+      eurPln: quotes.eurPln,
+      eurUsd: quotes.eurUsd,
+      vix: quotes.vix,
+      sources: searchSources.slice(0, 5),
+    };
 
     return {
       signals: (data.signals || []).map((s: any) => ({
@@ -161,17 +249,11 @@ export const fetchMarketIntelligenceDeep = async (
         priority: s.priority || 'DZIS',
       })),
       calendar: [],
-      globalData: data.globalData ? { ...data.globalData, sources: searchSources.slice(0, 5) } : undefined,
+      globalData: mergedGlobal,
     };
   } catch (error: any) {
     console.error('Deep API Error:', error);
-    if (
-      error?.message?.includes('401') ||
-      error?.message?.includes('UNAUTHENTICATED') ||
-      error?.message?.includes('Requested entity was not found.')
-    ) {
-      throw new Error('AUTH_REQUIRED');
-    }
+    if (isAuthError(error)) throw new Error('AUTH_REQUIRED');
     return { signals: [], calendar: [] };
   }
 };
@@ -193,13 +275,13 @@ export const validateAndFetchTickerDetails = async (ticker: string): Promise<ETF
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: MODEL_VALIDATE,
       contents: prompt,
-      config: { tools: [{ googleSearch: {} }], responseMimeType: 'application/json' },
+      config: { tools: [{ googleSearch: {} }] },
     });
 
-    const data = JSON.parse(response.text!);
-    return data.existsInXtb ? data : null;
+    const data = extractJson<any>(response.text);
+    return data && data.existsInXtb ? data : null;
   } catch {
     return null;
   }

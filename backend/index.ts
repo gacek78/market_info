@@ -1,12 +1,14 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import cron from 'node-cron';
 import {
   fetchMarketIntelligenceFast,
   fetchMarketIntelligenceDeep,
   validateAndFetchTickerDetails,
 } from './geminiService';
-import { getInfluencersOnServer } from './stateManager';
+import { getInfluencersOnServer, getRecentSignals } from './stateManager';
+import { runAlertScan, sendTelegramMessage, isTelegramConfigured } from './notifier';
 
 dotenv.config();
 
@@ -135,10 +137,56 @@ app.post('/api/influencers/reset', async (_req: Request, res: Response) => {
   return res.json(defaults);
 });
 
+// ─── Powiadomienia / historia ──────────────────────────────────────────────
+// Lekka historia ostatnio wykrytych sygnałów (z cyklicznych skanów).
+app.get('/api/signals/recent', async (_req: Request, res: Response) => {
+  res.json(await getRecentSignals());
+});
+
+// Ręczne uruchomienie skanu + wysyłki na Telegram (przydatne do konfiguracji).
+app.post('/api/alerts/run', async (_req: Request, res: Response) => {
+  try {
+    const result = await runAlertScan();
+    return res.json({ ok: true, ...result });
+  } catch (error: any) {
+    console.error('Alert scan error:', error);
+    return res.status(500).json({ error: 'Alert scan failed' });
+  }
+});
+
+// Wiadomość testowa — sprawdza, czy token/chat_id Telegrama są poprawne.
+app.post('/api/alerts/test', async (_req: Request, res: Response) => {
+  if (!isTelegramConfigured()) {
+    return res.status(400).json({ error: 'Telegram nie jest skonfigurowany (brak TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID)' });
+  }
+  const ok = await sendTelegramMessage('✅ Sentinel IKE: test połączenia z Telegramem działa.');
+  return res.json({ ok });
+});
+
 // ─── Health ───────────────────────────────────────────────────────────────
 app.get('/health', (_req: Request, res: Response) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    telegram: isTelegramConfigured(),
+  });
 });
+
+// ─── Scheduler powiadomień ──────────────────────────────────────────────────
+const ALERT_CRON = process.env.ALERT_CRON || '0 8 * * *'; // domyślnie 8:00 codziennie
+if (isTelegramConfigured()) {
+  if (cron.validate(ALERT_CRON)) {
+    cron.schedule(ALERT_CRON, () => {
+      console.log('[Scheduler] Uruchamiam cykliczny skan rynku...');
+      runAlertScan().catch((err) => console.error('[Scheduler] Skan nie powiódł się:', err));
+    });
+    console.log(`[Scheduler] Powiadomienia Telegram aktywne (cron: "${ALERT_CRON}").`);
+  } else {
+    console.error(`[Scheduler] Nieprawidłowy ALERT_CRON: "${ALERT_CRON}" — scheduler wyłączony.`);
+  }
+} else {
+  console.log('[Scheduler] Telegram nie skonfigurowany — powiadomienia wyłączone.');
+}
 
 app.listen(Number(port), '0.0.0.0', () => {
   console.log(`Sentinel IKE Backend listening on 0.0.0.0:${port}`);
