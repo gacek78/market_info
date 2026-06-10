@@ -80,6 +80,30 @@ function alertKey(s: MarketSignal): string {
   return `${s.ticker}|${(s.title || '').trim().toLowerCase().slice(0, 80)}`;
 }
 
+/**
+ * Składa digest sygnałów w gotowe wiadomości Telegram (HTML).
+ * Dzieli na kilka wiadomości, gdyby przekroczyły limit ~4096 znaków Telegrama.
+ * Wydzielone, żeby dało się podejrzeć/przetestować bez wysyłki.
+ */
+export function buildDigestMessages(signals: MarketSignal[], now: Date = new Date()): string[] {
+  if (signals.length === 0) return [];
+  const header = `📡 <b>Sentinel IKE — sygnały (${signals.length})</b>\n${now.toLocaleString('pl-PL')}`;
+  const blocks = [header, ...signals.map(formatSignal)];
+
+  const messages: string[] = [];
+  let buffer = '';
+  for (const block of blocks) {
+    if (buffer && (buffer + '\n\n' + block).length > 3800) {
+      messages.push(buffer);
+      buffer = block;
+    } else {
+      buffer = buffer ? `${buffer}\n\n${block}` : block;
+    }
+  }
+  if (buffer) messages.push(buffer);
+  return messages;
+}
+
 export interface ScanResult {
   scanned: number;
   matched: number;
@@ -118,21 +142,11 @@ export async function runAlertScan(): Promise<ScanResult> {
     return { scanned, matched: 0, sent: 0 };
   }
 
-  // Składamy jeden czytelny digest (z podziałem, gdyby przekroczył limit Telegrama).
-  const header = `📡 <b>Sentinel IKE — sygnały (${fresh.length})</b>\n${new Date().toLocaleString('pl-PL')}`;
-  const blocks = [header, ...fresh.map(formatSignal)];
-
+  // Składamy czytelny digest (z podziałem, gdyby przekroczył limit Telegrama).
   let sentOk = false;
-  let buffer = '';
-  for (const block of blocks) {
-    if ((buffer + '\n\n' + block).length > 3800) {
-      sentOk = (await sendTelegramMessage(buffer)) || sentOk;
-      buffer = block;
-    } else {
-      buffer = buffer ? `${buffer}\n\n${block}` : block;
-    }
+  for (const message of buildDigestMessages(fresh)) {
+    sentOk = (await sendTelegramMessage(message)) || sentOk;
   }
-  if (buffer) sentOk = (await sendTelegramMessage(buffer)) || sentOk;
 
   if (sentOk) {
     await markAlertsSent(fresh.map(alertKey));
