@@ -126,7 +126,7 @@ export const fetchMarketIntelligenceFast = async (
   }
 };
 
-// ─── DEEP (Faza 2): Gemini Pro + Google Search ────────────────────────────────
+// ─── DEEP (Faza 2): dwukrokowo — research z Google Search + strukturyzacja do JSON ──
 export const fetchMarketIntelligenceDeep = async (
   target: ETF | 'GLOBAL',
   influencers: Influencer[]
@@ -163,51 +163,70 @@ export const fetchMarketIntelligenceDeep = async (
        3. Co te osoby mówią o tym aktywie lub sektorze: ${influencersList}.
        4. Wyniki finansowe największych spółek w tym ETF.`;
 
-  const prompt = `
+  // KROK 1 — RESEARCH: naturalny prompt + Google Search.
+  // WAŻNE: wymuszanie "zwróć JSON" wyłącza wyszukiwanie (model odpowiada z pamięci),
+  // dlatego research prosimy tekstem — wtedy grounding realnie działa i daje źródła.
+  const researchPrompt = `
     Działaj jako senior analityk portfela IKE.
     ${realDataBlock}
     ${specificInstruction}
 
-    WYMAGANE: Wygeneruj 3-5 sygnałów z AKTUALNYMI danymi z internetu.
-    ZWRÓĆ WYŁĄCZNIE JSON (bez bloków markdown, bez komentarzy):
-    {
-      "globalData": {
-        "usdPln": "wartość", "eurPln": "wartość", "eurUsd": "wartość", "vix": "wartość",
-        "cpiPl": "wartość", "ratesPl": "wartość", "cpiUs": "wartość", "ratesUs": "wartość",
-        "sentiment": 50, "risk": 50
-      },
-      "signals": [
-        {
-          "type": "NEWS",
-          "severity": "medium",
-          "priority": "DZIS/TYDZIEN/MIESIAC",
-          "title": "Tytuł sygnału",
-          "summary": "Konkretny opis z datą/źródłem",
-          "longTermImpact": "Dlaczego to ważne dla emerytalnego IKE"
-        }
-      ]
-    }
+    Przeszukaj internet (Google) i zbierz NAJNOWSZE, KONKRETNE informacje — każdy wątek
+    z datą, liczbą i wydarzeniem. Wypisz 3-5 najważniejszych, aktualnych tematów dla tego
+    instrumentu. Dla każdego: co się stało, kiedy, dlaczego to ważne dla długoterminowego IKE.
+    Pisz zwięźle, rzeczowo. Opieraj się WYŁĄCZNIE na znalezionych informacjach.
   `;
 
   try {
-    // UWAGA: googleSearch jest niekompatybilny z responseMimeType:'application/json'
-    // — prosimy o tekst i sami wyciągamy JSON (extractJson).
-    const response = await ai.models.generateContent({
+    const research = await ai.models.generateContent({
       model: MODEL_DEEP,
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-      },
+      contents: researchPrompt,
+      config: { tools: [{ googleSearch: {} }] },
     });
 
-    const data = extractJson<any>(response.text);
-    if (!data) return { signals: [], calendar: [], globalData: { ...quotes, sources: [] } as any };
-
+    const researchText = research.text ?? '';
     const searchSources =
-      response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
+      research.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
         title: chunk.web?.title || 'Web Reference',
         uri: chunk.web?.uri || '#',
       })) || [];
+
+    // KROK 2 — STRUKTURYZACJA: zamień research na czysty JSON (bez search → można JSON mode).
+    const structurePrompt = `
+      Na podstawie PONIŻSZEJ ANALIZY zamień ją na sygnały rynkowe. NIE dodawaj informacji
+      spoza analizy. Zachowaj konkrety (daty, liczby).
+
+      ANALIZA:
+      ${researchText}
+
+      ZWRÓĆ WYŁĄCZNIE JSON:
+      {
+        "globalData": {
+          "cpiPl": "wartość lub ND", "ratesPl": "wartość lub ND",
+          "cpiUs": "wartość lub ND", "ratesUs": "wartość lub ND",
+          "sentiment": 50, "risk": 50
+        },
+        "signals": [
+          {
+            "type": "NEWS",
+            "severity": "low|medium|high",
+            "priority": "DZIS|TYDZIEN|MIESIAC",
+            "title": "Tytuł sygnału",
+            "summary": "Konkretny opis z datą",
+            "longTermImpact": "Dlaczego to ważne dla emerytalnego IKE"
+          }
+        ]
+      }
+    `;
+
+    const structured = await ai.models.generateContent({
+      model: MODEL_DEEP,
+      contents: structurePrompt,
+      config: { responseMimeType: 'application/json' },
+    });
+
+    const data = extractJson<any>(structured.text);
+    if (!data) return { signals: [], calendar: [], globalData: { ...quotes, sources: searchSources.slice(0, 5) } as any };
 
     // Realne kursy/VIX zawsze nadpisują to, co wymyśli model.
     const mergedGlobal = {
