@@ -17,6 +17,10 @@ services:
       dockerfile: Dockerfile
     environment:
       - API_KEY=${API_KEY}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - ALERT_SEVERITY=${ALERT_SEVERITY:-high}
+      - ALERT_CRON=${ALERT_CRON:-0 8 * * *}
     ports:
       - "3010:3000"
     volumes:
