@@ -2,7 +2,7 @@ import { ETF, Influencer } from './types';
 
 // ─── Modele Gemini (jedno miejsce do zmiany) ─────────────────────────────────
 export const MODEL_FAST = 'gemini-3-flash-preview';
-export const MODEL_DEEP = 'gemini-3.1-flash-lite'; // faza Deep + Google Search
+export const MODEL_DEEP = 'gemini-3.5-flash'; // faza Deep + Google Search
 export const MODEL_VALIDATE = 'gemini-3-flash-preview';
 
 export const TRACKED_ETFS: ETF[] = [
