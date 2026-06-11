@@ -6,13 +6,29 @@ const API_BASE_URL = 'http://192.168.88.8:3010';
 // ─────────────────────────────────────────────────────────────────────────────
 // Source credibility helper
 // ─────────────────────────────────────────────────────────────────────────────
-export function getSourceCredibility(uri: string): 'high' | 'medium' | 'unknown' {
+export function getSourceCredibility(uri: string, title?: string): 'high' | 'medium' | 'unknown' {
+  // Google grounding opakowuje prawdziwy URL w przekierowanie vertexaisearch,
+  // więc realna domena (np. "pap.pl") jest w `title` — to z niej liczymy wiarygodność.
+  const candidates: string[] = [];
+
   try {
-    const hostname = new URL(uri).hostname.replace('www.', '');
-    return TRUSTED_SOURCES[hostname] || 'unknown';
+    const host = new URL(uri).hostname.replace(/^www\./, '');
+    if (!host.includes('vertexaisearch')) candidates.push(host);
   } catch {
-    return 'unknown';
+    /* uri nie jest pełnym URL-em — pomijamy */
   }
+
+  if (title) {
+    const match = title.toLowerCase().trim().replace(/^www\./, '').match(/[a-z0-9-]+\.[a-z.]{2,}/);
+    if (match) candidates.push(match[0]);
+  }
+
+  for (const domain of candidates) {
+    if (TRUSTED_SOURCES[domain]) return TRUSTED_SOURCES[domain];
+    const hit = Object.keys(TRUSTED_SOURCES).find((d) => domain === d || domain.endsWith('.' + d));
+    if (hit) return TRUSTED_SOURCES[hit];
+  }
+  return 'unknown';
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -52,16 +52,27 @@ export const DEFAULT_INFLUENCERS: Influencer[] = [
 
 // ─── Source credibility ───────────────────────────────────────────────────────
 export const TRUSTED_SOURCES: Record<string, 'high' | 'medium'> = {
+  // Agencje / czołowa prasa finansowa
   'reuters.com': 'high',
   'bloomberg.com': 'high',
   'ft.com': 'high',
   'wsj.com': 'high',
   'economist.com': 'high',
+  'pap.pl': 'high',
+  'bankier.pl': 'high',
+  'parkiet.com': 'high',
+  'bbc.com': 'high',
+  'apnews.com': 'high',
+  // Wiarygodne, ale publicystyczne / wtórne
   'cnbc.com': 'medium',
+  'cbsnews.com': 'medium',
   'marketwatch.com': 'medium',
-  'bankier.pl': 'medium',
   'money.pl': 'medium',
   'stooq.pl': 'medium',
+  'stockwatch.pl': 'medium',
+  'strefainwestorow.pl': 'medium',
+  'comparic.pl': 'medium',
+  'businessradio.pl': 'medium',
   'seekingalpha.com': 'medium',
   'investing.com': 'medium',
   'businessinsider.com': 'medium',

@@ -199,11 +199,18 @@ export const fetchMarketIntelligenceDeep = async (
       ANALIZA:
       ${researchText}
 
+      ZASADY dla globalData:
+      - "ratesPl" = aktualna stopa referencyjna NBP jako LICZBA z % (np. "5.75%").
+      - "ratesUs" = górna granica przedziału Fed funds jako LICZBA z % (np. "3.75%").
+      - "cpiPl"/"cpiUs" = inflacja CPI r/r jako LICZBA z % (np. "3.1%").
+      - NIGDY nie wpisuj słów typu "bez zmian", "stabilnie" itp. — tylko liczba.
+      - Jeśli wartości naprawdę nie ma w analizie, wpisz dokładnie "ND".
+
       ZWRÓĆ WYŁĄCZNIE JSON:
       {
         "globalData": {
-          "cpiPl": "wartość lub ND", "ratesPl": "wartość lub ND",
-          "cpiUs": "wartość lub ND", "ratesUs": "wartość lub ND",
+          "cpiPl": "3.1%", "ratesPl": "5.75%",
+          "cpiUs": "4.2%", "ratesUs": "3.75%",
           "sentiment": 50, "risk": 50
         },
         "signals": [
