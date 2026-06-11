@@ -173,16 +173,27 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 // ─── Scheduler powiadomień ──────────────────────────────────────────────────
+// ALERT_CRON może zawierać KILKA wyrażeń rozdzielonych ';' — np. "0 5 * * *;15 14 * * *"
+// (skan o 5:00 ORAZ 14:15). Jednym wyrażeniem cron nie da się tego zapisać.
 const ALERT_CRON = process.env.ALERT_CRON || '0 8 * * *'; // domyślnie 8:00 codziennie
 if (isTelegramConfigured()) {
-  if (cron.validate(ALERT_CRON)) {
-    cron.schedule(ALERT_CRON, () => {
-      console.log('[Scheduler] Uruchamiam cykliczny skan rynku...');
-      runAlertScan().catch((err) => console.error('[Scheduler] Skan nie powiódł się:', err));
-    });
-    console.log(`[Scheduler] Powiadomienia Telegram aktywne (cron: "${ALERT_CRON}").`);
+  const expressions = ALERT_CRON.split(';').map((e) => e.trim()).filter(Boolean);
+  const scheduled: string[] = [];
+  for (const expr of expressions) {
+    if (cron.validate(expr)) {
+      cron.schedule(expr, () => {
+        console.log(`[Scheduler] Uruchamiam cykliczny skan rynku (cron: "${expr}")...`);
+        runAlertScan().catch((err) => console.error('[Scheduler] Skan nie powiódł się:', err));
+      });
+      scheduled.push(expr);
+    } else {
+      console.error(`[Scheduler] Pomijam nieprawidłowe wyrażenie cron: "${expr}".`);
+    }
+  }
+  if (scheduled.length) {
+    console.log(`[Scheduler] Powiadomienia Telegram aktywne (${scheduled.length}× cron: ${scheduled.map((e) => `"${e}"`).join(', ')}).`);
   } else {
-    console.error(`[Scheduler] Nieprawidłowy ALERT_CRON: "${ALERT_CRON}" — scheduler wyłączony.`);
+    console.error(`[Scheduler] Brak poprawnych wyrażeń w ALERT_CRON ("${ALERT_CRON}") — scheduler wyłączony.`);
   }
 } else {
   console.log('[Scheduler] Telegram nie skonfigurowany — powiadomienia wyłączone.');
