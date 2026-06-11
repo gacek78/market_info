@@ -47,8 +47,6 @@ async function fetchStooqQuote(symbol: string): Promise<Quote> {
   }
 }
 
-const fmt = (q: Quote): string => (q.price != null ? q.price.toFixed(q.price < 10 ? 4 : 2) : 'ND');
-
 export interface MarketQuotes {
   usdPln: string;
   eurPln: string;
@@ -57,22 +55,66 @@ export interface MarketQuotes {
   asOf: string | null;
 }
 
-/** Pobiera podstawowy koszyk makro (waluty + VIX) równolegle. */
+/** Pobiera podstawowy koszyk makro: kursy z Frankfurter (EBC), VIX z Yahoo. */
 export async function fetchMarketQuotes(): Promise<MarketQuotes> {
-  const [usdpln, eurpln, eurusd, vix] = await Promise.all([
-    fetchStooqQuote('usdpln'),
-    fetchStooqQuote('eurpln'),
-    fetchStooqQuote('eurusd'),
-    fetchStooqQuote('^vix'),
-  ]);
+  const [fx, vix] = await Promise.all([fetchFx(), fetchVix()]);
+  return {
+    usdPln: fx.usdPln,
+    eurPln: fx.eurPln,
+    eurUsd: fx.eurUsd,
+    vix: vix != null ? vix.toFixed(2) : 'ND',
+    asOf: fx.asOf,
+  };
+}
+
+/**
+ * Kursy walut z Frankfurter.app (dane EBC) — darmowe, bez klucza, stabilny JSON.
+ * 2 wywołania: bazą EUR (→ PLN, USD) oraz bazą USD (→ PLN).
+ */
+async function fetchFx(): Promise<{ usdPln: string; eurPln: string; eurUsd: string; asOf: string | null }> {
+  const get = async (from: string, to: string): Promise<{ rates: Record<string, number>; date: string } | null> => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      const res = await fetch(`https://api.frankfurter.app/latest?from=${from}&to=${to}`, {
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) return null;
+      return (await res.json()) as { rates: Record<string, number>; date: string };
+    } catch {
+      return null;
+    }
+  };
+
+  const [eur, usd] = await Promise.all([get('EUR', 'PLN,USD'), get('USD', 'PLN')]);
+  const n = (v: number | undefined, d = 4) => (typeof v === 'number' ? v.toFixed(d) : 'ND');
 
   return {
-    usdPln: fmt(usdpln),
-    eurPln: fmt(eurpln),
-    eurUsd: fmt(eurusd),
-    vix: fmt(vix),
-    asOf: usdpln.date ?? eurpln.date ?? null,
+    usdPln: n(usd?.rates?.PLN),
+    eurPln: n(eur?.rates?.PLN),
+    eurUsd: n(eur?.rates?.USD),
+    asOf: usd?.date ?? eur?.date ?? null,
   };
+}
+
+/** VIX z publicznego endpointu wykresów Yahoo Finance (bez klucza). */
+async function fetchVix(): Promise<number | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX', {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SentinelIKE/1.0)' },
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return null;
+    const json: any = await res.json();
+    const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
+    return typeof price === 'number' ? price : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
