@@ -154,6 +154,15 @@ export const fetchMarketIntelligenceDeep = async (
   const specificInstruction = isGlobal
     ? `ANALIZA MAKRO: Skup się na parach walutowych (USD/PLN, EUR/PLN), inflacji w Polsce i USA oraz ogólnym nastroju rynkowym.
        Pobierz AKTUALNE newsy i kontekst przez Google Search (dane liczbowe walut/VIX masz już podane wyżej — użyj ich).
+
+       OBOWIĄZKOWO ustal przez Google Search i podaj na początku, w osobnej sekcji "DANE MAKRO",
+       AKTUALNE liczby (każda z datą/okresem) — nawet jeśli nie są głównym tematem dnia:
+       - CPI USA (inflacja r/r),
+       - CPI Polska (inflacja r/r),
+       - stopa referencyjna NBP,
+       - górna granica przedziału stóp Fed (Fed funds).
+       Każda z tych czterech liczb MUSI się pojawić w tekście.
+
        Monitoruj wypowiedzi tych osób: ${influencersList}.`
     : `GŁĘBOKA ANALIZA INSTRUMENTU: ${(target as ETF).ticker} (${(target as ETF).name}).
        ZAKAZ: Nie podawaj ogólnych danych o inflacji w Polsce czy kursie EUR/PLN, chyba że mają KLUCZOWY wpływ na ten instrument.
@@ -199,12 +208,14 @@ export const fetchMarketIntelligenceDeep = async (
       ANALIZA:
       ${researchText}
 
-      ZASADY dla globalData:
+      ZASADY dla globalData (wyciągnij z sekcji "DANE MAKRO" oraz reszty analizy):
+      - "cpiUs" = inflacja CPI USA r/r jako LICZBA z % (np. "4.2%").
+      - "cpiPl" = inflacja CPI Polska r/r jako LICZBA z % (np. "3.1%").
       - "ratesPl" = aktualna stopa referencyjna NBP jako LICZBA z % (np. "5.75%").
       - "ratesUs" = górna granica przedziału Fed funds jako LICZBA z % (np. "3.75%").
-      - "cpiPl"/"cpiUs" = inflacja CPI r/r jako LICZBA z % (np. "3.1%").
-      - NIGDY nie wpisuj słów typu "bez zmian", "stabilnie" itp. — tylko liczba.
-      - Jeśli wartości naprawdę nie ma w analizie, wpisz dokładnie "ND".
+      - Każda z tych czterech liczb jest w analizie — MUSISZ ją wypełnić. NIE wpisuj
+        słów typu "bez zmian"/"stabilnie", tylko liczbę. "ND" jest dopuszczalne TYLKO
+        gdy danej liczby faktycznie nie ma w analizie.
 
       ZWRÓĆ WYŁĄCZNIE JSON:
       {
