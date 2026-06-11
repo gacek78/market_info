@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { MarketIntelligenceResponse } from "./types";
 import { ETF, Influencer } from "./types";
 import { fetchMarketQuotes, fetchTickerPrice } from "./marketData";
-import { MODEL_FAST, MODEL_DEEP, MODEL_VALIDATE } from "./constants";
+import { MODEL_FAST, MODEL_DEEP, MODEL_STRUCTURE, MODEL_VALIDATE } from "./constants";
 
 const getAI = () => {
   if (!process.env.API_KEY) {
@@ -220,7 +220,7 @@ export const fetchMarketIntelligenceDeep = async (
     `;
 
     const structured = await ai.models.generateContent({
-      model: MODEL_DEEP,
+      model: MODEL_STRUCTURE,
       contents: structurePrompt,
       config: { responseMimeType: 'application/json' },
     });
