@@ -17,8 +17,8 @@ function getRelativeTime(date: Date): string {
   return `${diffD}d temu`;
 }
 
-function getCredibilityBadge(uri: string, title?: string): JSX.Element {
-  const cred = getSourceCredibility(uri);
+function getCredibilityBadge(uri: string, title?: string): React.JSX.Element {
+  const cred = getSourceCredibility(uri, title);
   
   let displayName = '';
   try {
