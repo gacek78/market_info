@@ -41,6 +41,8 @@ Single JSON file at `DATA_DIR` (default `backend/data/state.json`, git-ignored, 
 - The Gemini API key env var is **`API_KEY`** on the backend (and `GEMINI_API_KEY` is mapped to `process.env.API_KEY` in `frontend/vite.config.ts`).
 - Both compose services set `restart: unless-stopped`. **Production** runs on a home NAS under `docker compose` (V2) at `/compose/market_info`; deploy = `git pull` + `docker compose up -d --force-recreate <svc>` (frontend uses vite with a mounted volume, so no image rebuild needed for code; rebuild only when the Dockerfile changes). The server's `.env` is **separate and git-ignored** — `ALERT_CRON`/secrets must be edited on the server, never committed.
 
+> **Operational context lives in Claude Code memory** (this machine, `~/.claude/`), not in the repo: SSH/deploy access to the NAS, the container inventory, and Docker disk-hygiene rules are in **global memory** (`nas_server_access.md`); market_info-specific deploy notes and gotchas are in **project memory** (`deployment.md`). Check those before asking the user how to reach or deploy to the server.
+
 ## Commands
 
 ```bash
