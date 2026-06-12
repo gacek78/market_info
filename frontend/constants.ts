@@ -63,8 +63,18 @@ export const TRUSTED_SOURCES: Record<string, 'high' | 'medium'> = {
   'parkiet.com': 'high',
   'bbc.com': 'high',
   'apnews.com': 'high',
+  // Źródła oficjalne / instytucjonalne (dane u źródła)
+  'nbp.pl': 'high', // Narodowy Bank Polski — pierwotne źródło dla stóp/komunikatów
+  'stat.gov.pl': 'high', // GUS — pierwotne źródło dla CPI/inflacji
+  'gov.pl': 'high',
+  'ecb.europa.eu': 'high', // Europejski Bank Centralny
+  'federalreserve.gov': 'high',
+  'obserwatorfinansowy.pl': 'high', // portal NBP
   // Wiarygodne, ale publicystyczne / wtórne
   'cnbc.com': 'medium',
+  'tradingeconomics.com': 'medium', // szeroko cytowany agregator danych makro
+  'gurufocus.com': 'medium',
+  'forbes.pl': 'medium',
   'cbsnews.com': 'medium',
   'marketwatch.com': 'medium',
   'money.pl': 'medium',
