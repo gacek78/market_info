@@ -348,7 +348,7 @@ const App: React.FC = () => {
         <section className="space-y-10">
           {/* Global macro bar */}
           {selectedEtf === 'GLOBAL' && globalData && (
-            <div className="bg-slate-900 border border-slate-800 border-l-4 border-l-blue-500 rounded-3xl overflow-hidden shadow-2xl">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
               <div className="p-8">
                 <div className="flex items-center gap-3 mb-8">
                   <div className="w-1.5 h-5 bg-blue-500 rounded-full" />
@@ -408,7 +408,7 @@ const App: React.FC = () => {
       <aside className="w-full lg:w-80 border-l border-slate-800/50 p-6 bg-slate-900/10 flex flex-col gap-8 overflow-y-auto">
 
         {/* Sentiment radar */}
-        <div className="p-6 bg-blue-900/10 border border-blue-500/20 border-l-4 border-l-blue-500 rounded-3xl shadow-lg">
+        <div className="p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-xl">
           <div className="flex items-center gap-2 mb-6">
             <div className="w-1.5 h-5 bg-blue-500 rounded-full" />
             <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
