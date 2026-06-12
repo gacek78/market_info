@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { ETF, Influencer, MarketSignal } from './types';
-import { TRACKED_ETFS, DEFAULT_INFLUENCERS } from './constants';
+import { ETF, Influencer, MarketSignal, PortfolioSummary } from './types';
+import { TRACKED_ETFS, DEFAULT_INFLUENCERS, DEFAULT_STRATEGY } from './constants';
 
 /**
  * TRWAŁY STAN APLIKACJI
@@ -19,6 +19,10 @@ interface PersistedState {
   sentAlertKeys: string[];
   /** Ostatnio wykryte sygnały (lekka historia / podgląd). */
   recentSignals: MarketSignal[];
+  /** Opis strategii inwestora — wejście do podsumowania portfelowego. */
+  strategy: string;
+  /** Ostatnio wygenerowane podsumowanie portfelowe (do szybkiego podglądu). */
+  lastSummary: PortfolioSummary | null;
 }
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -33,6 +37,8 @@ function defaultState(): PersistedState {
     influencers: [...DEFAULT_INFLUENCERS],
     sentAlertKeys: [],
     recentSignals: [],
+    strategy: DEFAULT_STRATEGY,
+    lastSummary: null,
   };
 }
 
@@ -127,4 +133,25 @@ export const recordSignals = async (signals: MarketSignal[]): Promise<void> => {
 
 export const getRecentSignals = async (): Promise<MarketSignal[]> => {
   return (await load()).recentSignals;
+};
+
+// ─── Strategia inwestora + ostatnie podsumowanie portfelowe ─────────────────────
+export const getStrategy = async (): Promise<string> => {
+  return (await load()).strategy;
+};
+
+export const saveStrategy = async (text: string): Promise<void> => {
+  const s = await load();
+  s.strategy = text;
+  await persist();
+};
+
+export const getLastSummary = async (): Promise<PortfolioSummary | null> => {
+  return (await load()).lastSummary;
+};
+
+export const saveLastSummary = async (summary: PortfolioSummary): Promise<void> => {
+  const s = await load();
+  s.lastSummary = summary;
+  await persist();
 };

@@ -48,3 +48,21 @@ export interface MarketIntelligenceResponse {
   calendar: any[];
   globalData?: GlobalMacroData;
 }
+
+// ─── Podsumowanie portfelowe ("Podsumowanie dla mnie") ───────────────────────
+export type PortfolioStance = 'HOLD' | 'ACCUMULATE' | 'WATCH' | 'REDUCE';
+
+export interface PortfolioSummary {
+  overall: 'BULLISH' | 'NEUTRAL' | 'BEARISH';
+  /** Jednozdaniowy nagłówek. */
+  headline: string;
+  /** 3-5 zdań: co się dzieje i co to znaczy dla planu inwestycyjnego. */
+  narrative: string;
+  /** Rekomendacja per śledzony aktyw. */
+  perAsset: { ticker: string; stance: PortfolioStance; note: string }[];
+  /** Konkretne sugestie działań. */
+  actions: string[];
+  /** Strategia użyta do wygenerowania (audyt). */
+  strategy: string;
+  timestamp: Date;
+}

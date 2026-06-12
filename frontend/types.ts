@@ -67,3 +67,16 @@ export interface CacheInfo {
   timeLabel: string;
   ageMs: number;
 }
+
+// ─── Podsumowanie portfelowe ("Podsumowanie dla mnie") ───────────────────────
+export type PortfolioStance = 'HOLD' | 'ACCUMULATE' | 'WATCH' | 'REDUCE';
+
+export interface PortfolioSummary {
+  overall: 'BULLISH' | 'NEUTRAL' | 'BEARISH';
+  headline: string;
+  narrative: string;
+  perAsset: { ticker: string; stance: PortfolioStance; note: string }[];
+  actions: string[];
+  strategy: string;
+  timestamp: Date;
+}

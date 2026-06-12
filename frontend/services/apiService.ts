@@ -1,4 +1,4 @@
-import { ETF, Influencer, MarketIntelligenceResponse, MarketSignal, SignalPriority } from '../types';
+import { ETF, Influencer, MarketIntelligenceResponse, MarketSignal, SignalPriority, PortfolioSummary } from '../types';
 import { CACHE_TTL_MS, TRUSTED_SOURCES, SOURCE_NAME_ALIASES } from '../constants';
 
 const API_BASE_URL = 'http://192.168.88.8:3010';
@@ -227,4 +227,42 @@ export async function deleteInfluencer(handle: string): Promise<void> {
 export async function resetInfluencers(): Promise<Influencer[]> {
   const r = await fetch(`${API_BASE_URL}/api/influencers/reset`, { method: 'POST' });
   return r.ok ? r.json() : [];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Strategia inwestora + podsumowanie portfelowe ("Podsumowanie dla mnie")
+// ─────────────────────────────────────────────────────────────────────────────
+function rehydrateSummary(s: any): PortfolioSummary | null {
+  if (!s) return null;
+  return { ...s, timestamp: new Date(s.timestamp) } as PortfolioSummary;
+}
+
+export async function getStrategy(): Promise<string> {
+  const r = await fetch(`${API_BASE_URL}/api/strategy`);
+  if (!r.ok) return '';
+  const data = await r.json();
+  return data?.strategy ?? '';
+}
+
+export async function saveStrategy(strategy: string): Promise<void> {
+  await fetch(`${API_BASE_URL}/api/strategy`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ strategy }),
+  });
+}
+
+/** Ostatnio wygenerowane podsumowanie (szybkie, bez skanu). */
+export async function getPortfolioSummary(): Promise<PortfolioSummary | null> {
+  const r = await fetch(`${API_BASE_URL}/api/summary`);
+  if (!r.ok) return null;
+  return rehydrateSummary(await r.json());
+}
+
+/** Uruchamia pełny skan + syntezę. Operacja długa. */
+export async function runPortfolioSummary(): Promise<PortfolioSummary> {
+  const r = await fetch(`${API_BASE_URL}/api/summary`, { method: 'POST' });
+  if (r.status === 401) throw new Error('AUTH_REQUIRED');
+  if (!r.ok) throw new Error(`Summary API error: ${r.statusText}`);
+  return rehydrateSummary(await r.json())!;
 }

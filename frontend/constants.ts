@@ -117,5 +117,10 @@ export const SOURCE_NAME_ALIASES: Record<string, string> = {
   'business insider': 'businessinsider.com',
 };
 
+// ─── Domyślna strategia inwestora (fallback; źródłem prawdy jest backend) ─────
+export const DEFAULT_STRATEGY =
+  'Długoterminowe IKE (horyzont 10-15 lat), regularna akumulacja, podejście buy-and-hold. ' +
+  'Spadki traktuję jako okazje do dokupienia, nie panikuję. Priorytet: szeroka dywersyfikacja i niskie koszty.';
+
 // ─── Cache TTL ────────────────────────────────────────────────────────────────
 export const CACHE_TTL_MS = 60 * 60 * 1000; // 1 godzina

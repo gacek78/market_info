@@ -7,8 +7,16 @@ import {
   fetchMarketIntelligenceDeep,
   validateAndFetchTickerDetails,
 } from './geminiService';
-import { getInfluencersOnServer, getRecentSignals } from './stateManager';
-import { runAlertScan, sendTelegramMessage, isTelegramConfigured } from './notifier';
+import {
+  getInfluencersOnServer,
+  getRecentSignals,
+  getStrategy,
+  saveStrategy,
+  getLastSummary,
+  saveLastSummary,
+} from './stateManager';
+import { generatePortfolioSummary } from './geminiService';
+import { runAlertScan, scanAllTargets, sendTelegramMessage, isTelegramConfigured } from './notifier';
 
 dotenv.config();
 
@@ -135,6 +143,38 @@ app.post('/api/influencers/reset', async (_req: Request, res: Response) => {
   const { resetInfluencersOnServer } = await import('./stateManager');
   const defaults = await resetInfluencersOnServer();
   return res.json(defaults);
+});
+
+// ─── Strategia inwestora ────────────────────────────────────────────────────
+app.get('/api/strategy', async (_req: Request, res: Response) => {
+  return res.json({ strategy: await getStrategy() });
+});
+
+app.put('/api/strategy', async (req: Request, res: Response) => {
+  const strategy = typeof req.body?.strategy === 'string' ? req.body.strategy : '';
+  await saveStrategy(strategy);
+  return res.json({ ok: true, strategy });
+});
+
+// ─── Podsumowanie portfelowe ("Podsumowanie dla mnie") ───────────────────────
+// Szybki podgląd ostatnio wygenerowanego podsumowania (bez skanu).
+app.get('/api/summary', async (_req: Request, res: Response) => {
+  return res.json(await getLastSummary());
+});
+
+// Pełny skan wszystkich aktywów + synteza. Operacja ciężka (wiele wywołań Deep).
+app.post('/api/summary', async (_req: Request, res: Response) => {
+  try {
+    if (!process.env.API_KEY) return res.status(401).json({ error: 'API key not configured' });
+    const [{ signals, globalData }, strategy] = await Promise.all([scanAllTargets(), getStrategy()]);
+    const summary = await generatePortfolioSummary(strategy, signals, globalData);
+    await saveLastSummary(summary);
+    return res.json(summary);
+  } catch (error: any) {
+    if (error.message === 'AUTH_REQUIRED') return res.status(401).json({ error: 'AUTH_REQUIRED' });
+    console.error('Summary Error:', error);
+    return res.status(500).json({ error: 'Failed to generate portfolio summary' });
+  }
 });
 
 // ─── Powiadomienia / historia ──────────────────────────────────────────────

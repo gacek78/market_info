@@ -1,8 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
-import { MarketIntelligenceResponse, MarketSignal } from "./types";
+import { MarketIntelligenceResponse, MarketSignal, GlobalMacroData, PortfolioSummary } from "./types";
 import { ETF, Influencer } from "./types";
 import { fetchMarketQuotes, fetchTickerPrice, resolveRedirect } from "./marketData";
-import { MODEL_FAST, MODEL_DEEP, MODEL_STRUCTURE, MODEL_VALIDATE } from "./constants";
+import { MODEL_FAST, MODEL_DEEP, MODEL_STRUCTURE, MODEL_VALIDATE, MODEL_SUMMARY } from "./constants";
 
 const getAI = () => {
   if (!process.env.API_KEY) {
@@ -372,6 +372,100 @@ export const verifyHighSeveritySignals = async (
       }
     }),
   );
+};
+
+// ─── PODSUMOWANIE PORTFELOWE ("Podsumowanie dla mnie") ───────────────────────
+/**
+ * Synteza portfelowa: bierze WSZYSTKIE świeże sygnały (ze skanu makro + każdego
+ * aktywa) i opis strategii inwestora, po czym zwraca jedno zwięzłe podsumowanie —
+ * co najnowsze informacje znaczą dla planów inwestycyjnych użytkownika.
+ *
+ * Jedno wywołanie modelu w trybie JSON (bez Google Search — to czysta synteza nad
+ * już zebranymi sygnałami). ZASADA anty-halucynacji: model NIE może dodawać
+ * informacji spoza dostarczonych sygnałów.
+ */
+export const generatePortfolioSummary = async (
+  strategy: string,
+  signals: MarketSignal[],
+  globalData?: GlobalMacroData,
+): Promise<PortfolioSummary> => {
+  const ai = getAI();
+
+  // Lista śledzonych tickerów (z sygnałów, bez GLOBAL) — model ma się trzymać tych aktywów.
+  const tickers = [...new Set(signals.map((s) => s.ticker).filter((t) => t && t !== 'GLOBAL'))];
+
+  const macroBlock = globalData
+    ? `DANE MAKRO (twarde, użyj jako kontekst): USD/PLN ${globalData.usdPln}, EUR/PLN ${globalData.eurPln}, ` +
+      `VIX ${globalData.vix}, CPI PL ${globalData.cpiPl}, CPI US ${globalData.cpiUs}, ` +
+      `stopa NBP ${globalData.ratesPl}, Fed ${globalData.ratesUs}.`
+    : '';
+
+  const signalsBlock = signals
+    .map(
+      (s, i) =>
+        `[${i + 1}] (${s.ticker}, ${s.severity}) ${s.title}: ${s.summary}` +
+        (s.longTermImpact ? ` | IKE: ${s.longTermImpact}` : ''),
+    )
+    .join('\n');
+
+  const prompt = `
+    Działaj jako senior doradca portfela IKE. Napisz spersonalizowane PODSUMOWANIE dla inwestora.
+
+    STRATEGIA INWESTORA (dopasuj ton i rekomendacje do niej):
+    ${strategy}
+
+    ${macroBlock}
+
+    ŚWIEŻE SYGNAŁY (jedyne źródło — NIE dodawaj informacji spoza tej listy):
+    ${signalsBlock || '(brak sygnałów — napisz, że nie wykryto istotnych zmian)'}
+
+    Śledzone aktywa: ${tickers.join(', ') || '(brak)'}.
+
+    Zsyntetyzuj to w skrócie: ogólny wydźwięk dla portfela, co to znaczy KONKRETNIE dla planów
+    inwestora (z uwzględnieniem jego strategii), oraz rekomendacja per aktyw. Pisz po polsku,
+    rzeczowo, bez ogólników. Rekomendacje muszą wynikać z sygnałów, a nie z domysłów.
+
+    ZWRÓĆ WYŁĄCZNIE JSON:
+    {
+      "overall": "BULLISH|NEUTRAL|BEARISH",
+      "headline": "Jedno zdanie podsumowania",
+      "narrative": "3-5 zdań: co się dzieje i co to znaczy dla planu inwestycyjnego",
+      "perAsset": [
+        { "ticker": "XNAS.DE", "stance": "HOLD|ACCUMULATE|WATCH|REDUCE", "note": "krótkie uzasadnienie z sygnału" }
+      ],
+      "actions": ["konkretna sugestia działania"]
+    }
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_SUMMARY,
+      contents: prompt,
+      config: { responseMimeType: 'application/json' },
+    });
+    const data = extractJson<any>(response.text);
+    return {
+      overall: data?.overall === 'BULLISH' || data?.overall === 'BEARISH' ? data.overall : 'NEUTRAL',
+      headline: data?.headline ?? 'Brak istotnych zmian dla portfela.',
+      narrative: data?.narrative ?? '',
+      perAsset: Array.isArray(data?.perAsset) ? data.perAsset : [],
+      actions: Array.isArray(data?.actions) ? data.actions : [],
+      strategy,
+      timestamp: new Date(),
+    };
+  } catch (error: any) {
+    console.error('Portfolio Summary Error:', error);
+    if (isAuthError(error)) throw new Error('AUTH_REQUIRED');
+    return {
+      overall: 'NEUTRAL',
+      headline: 'Nie udało się wygenerować podsumowania.',
+      narrative: '',
+      perAsset: [],
+      actions: [],
+      strategy,
+      timestamp: new Date(),
+    };
+  }
 };
 
 // ─── VALIDATE TICKER ──────────────────────────────────────────────────────────

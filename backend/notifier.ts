@@ -12,15 +12,17 @@
  *   ALERT_CRON          — harmonogram cron (domyślnie '0 8 * * *' = 8:00 codziennie)
  */
 
-import { fetchMarketIntelligenceDeep } from './geminiService';
+import { fetchMarketIntelligenceDeep, generatePortfolioSummary } from './geminiService';
 import {
   getEtfsOnServer,
   getInfluencersOnServer,
+  getStrategy,
+  saveLastSummary,
   wasAlertSent,
   markAlertsSent,
   recordSignals,
 } from './stateManager';
-import { ETF, MarketSignal } from './types';
+import { ETF, GlobalMacroData, MarketSignal, PortfolioSummary } from './types';
 
 const SEVERITY_RANK: Record<string, number> = { low: 0, medium: 1, high: 2 };
 
@@ -77,6 +79,34 @@ function formatSignal(s: MarketSignal): string {
   return `${head}${tag}\n${body}${impact}${src}`;
 }
 
+const STANCE_EMOJI: Record<string, string> = {
+  ACCUMULATE: '🟢 Dokupuj',
+  HOLD: '⚪ Trzymaj',
+  WATCH: '👀 Obserwuj',
+  REDUCE: '🔻 Redukuj',
+};
+const OVERALL_EMOJI: Record<string, string> = { BULLISH: '📈', NEUTRAL: '➖', BEARISH: '📉' };
+
+/** Składa sekcję "Podsumowanie dla Ciebie" do wiadomości Telegram (HTML). */
+export function formatPortfolioSummary(s: PortfolioSummary): string {
+  const head = `🧭 <b>Podsumowanie dla Ciebie</b> ${OVERALL_EMOJI[s.overall] ?? ''}`;
+  const headline = s.headline ? `\n<b>${escapeHtml(s.headline)}</b>` : '';
+  const narrative = s.narrative ? `\n${escapeHtml(s.narrative)}` : '';
+  const perAsset = s.perAsset?.length
+    ? '\n\n' +
+      s.perAsset
+        .map(
+          (a) =>
+            `• <b>${escapeHtml(a.ticker)}</b> — ${STANCE_EMOJI[a.stance] ?? escapeHtml(a.stance)}: ${escapeHtml(a.note || '')}`,
+        )
+        .join('\n')
+    : '';
+  const actions = s.actions?.length
+    ? '\n\n<i>Sugestie:</i>\n' + s.actions.map((a) => `– ${escapeHtml(a)}`).join('\n')
+    : '';
+  return `${head}${headline}${narrative}${perAsset}${actions}`;
+}
+
 /** Stabilny klucz dedup — ten sam news nie zostanie wysłany dwa razy. */
 function alertKey(s: MarketSignal): string {
   return `${s.ticker}|${(s.title || '').trim().toLowerCase().slice(0, 80)}`;
@@ -87,6 +117,23 @@ function alertKey(s: MarketSignal): string {
  * Dzieli na kilka wiadomości, gdyby przekroczyły limit ~4096 znaków Telegrama.
  * Wydzielone, żeby dało się podejrzeć/przetestować bez wysyłki.
  */
+/** Dzieli pojedynczy długi tekst na fragmenty < limitu Telegrama (po liniach). */
+export function chunkText(text: string, limit = 3800): string[] {
+  if (text.length <= limit) return text ? [text] : [];
+  const out: string[] = [];
+  let buffer = '';
+  for (const line of text.split('\n')) {
+    if (buffer && (buffer + '\n' + line).length > limit) {
+      out.push(buffer);
+      buffer = line;
+    } else {
+      buffer = buffer ? `${buffer}\n${line}` : line;
+    }
+  }
+  if (buffer) out.push(buffer);
+  return out;
+}
+
 export function buildDigestMessages(signals: MarketSignal[], now: Date = new Date()): string[] {
   if (signals.length === 0) return [];
   const header = `📡 <b>Sentinel IKE — sygnały (${signals.length})</b>\n${now.toLocaleString('pl-PL')}`;
@@ -112,54 +159,100 @@ export interface ScanResult {
   sent: number;
 }
 
+export interface FullScan {
+  /** WSZYSTKIE sygnały ze wszystkich celów (bez filtrowania severity). */
+  signals: MarketSignal[];
+  /** Dane makro z celu GLOBAL (FX/VIX/CPI/stopy). */
+  globalData?: GlobalMacroData;
+  scanned: number;
+}
+
 /**
- * Skanuje makro + wszystkie ETF-y, wybiera sygnały >= ALERT_SEVERITY,
- * odfiltrowuje już wysłane i publikuje resztę na Telegram.
+ * Głęboki skan makro + wszystkich ETF-ów. Zwraca KOMPLET sygnałów (bez filtra) i
+ * dane makro — jeden skan obsługuje zarówno digest alertów, jak i podsumowanie.
  */
-export async function runAlertScan(): Promise<ScanResult> {
-  const minRank = SEVERITY_RANK[(process.env.ALERT_SEVERITY || 'high').toLowerCase()] ?? 2;
+export async function scanAllTargets(): Promise<FullScan> {
   const [etfs, influencers] = await Promise.all([getEtfsOnServer(), getInfluencersOnServer()]);
   const targets: (ETF | 'GLOBAL')[] = ['GLOBAL', ...etfs];
 
-  const fresh: MarketSignal[] = [];
+  const signals: MarketSignal[] = [];
+  let globalData: GlobalMacroData | undefined;
   let scanned = 0;
 
   for (const target of targets) {
     scanned++;
     try {
       const result = await fetchMarketIntelligenceDeep(target, influencers);
-      for (const sig of result.signals) {
-        const rank = SEVERITY_RANK[sig.severity] ?? 0;
-        if (rank < minRank) continue;
-        // Nie wysyłamy na Telegram sygnałów, które walidacja odrzuciła jako niepotwierdzone.
-        if (sig.verified === false) {
-          console.log(`[Notifier] Pomijam niepotwierdzony sygnał: ${sig.title}`);
-          continue;
-        }
-        if (await wasAlertSent(alertKey(sig))) continue;
-        fresh.push(sig);
-      }
+      signals.push(...result.signals);
+      if (target === 'GLOBAL' && result.globalData) globalData = result.globalData;
     } catch (err) {
       console.error(`[Notifier] Skan ${typeof target === 'string' ? target : target.ticker} nie powiódł się:`, err);
     }
   }
 
-  if (fresh.length === 0) {
-    console.log('[Notifier] Skan zakończony — brak nowych istotnych sygnałów.');
-    return { scanned, matched: 0, sent: 0 };
+  return { signals, globalData, scanned };
+}
+
+/** Czy generować podsumowanie portfelowe w cyklu (env PORTFOLIO_SUMMARY, domyślnie on). */
+function isPortfolioSummaryEnabled(): boolean {
+  const v = (process.env.PORTFOLIO_SUMMARY ?? '').toLowerCase();
+  return v !== 'false' && v !== '0';
+}
+
+/**
+ * Skanuje makro + wszystkie ETF-y, wybiera sygnały >= ALERT_SEVERITY,
+ * odfiltrowuje już wysłane i publikuje resztę na Telegram. Dodatkowo (gdy włączone)
+ * generuje i wysyła spersonalizowane "Podsumowanie dla Ciebie" na bazie WSZYSTKICH sygnałów.
+ */
+export async function runAlertScan(): Promise<ScanResult & { summary?: PortfolioSummary }> {
+  const minRank = SEVERITY_RANK[(process.env.ALERT_SEVERITY || 'high').toLowerCase()] ?? 2;
+  const { signals: allSignals, globalData, scanned } = await scanAllTargets();
+
+  // Filtr alertów: severity >= próg, potwierdzone, jeszcze nie wysłane.
+  const fresh: MarketSignal[] = [];
+  for (const sig of allSignals) {
+    const rank = SEVERITY_RANK[sig.severity] ?? 0;
+    if (rank < minRank) continue;
+    if (sig.verified === false) {
+      console.log(`[Notifier] Pomijam niepotwierdzony sygnał: ${sig.title}`);
+      continue;
+    }
+    if (await wasAlertSent(alertKey(sig))) continue;
+    fresh.push(sig);
   }
 
-  // Składamy czytelny digest (z podziałem, gdyby przekroczył limit Telegrama).
+  // Podsumowanie portfelowe (na bazie wszystkich sygnałów, niezależnie od dedup/filtra).
+  let summary: PortfolioSummary | undefined;
+  if (isPortfolioSummaryEnabled()) {
+    try {
+      const strategy = await getStrategy();
+      summary = await generatePortfolioSummary(strategy, allSignals, globalData);
+      await saveLastSummary(summary);
+    } catch (err) {
+      console.error('[Notifier] Generowanie podsumowania nie powiodło się:', err);
+    }
+  }
+
+  // Składamy wiadomości: najpierw podsumowanie, potem digest sygnałów.
+  const messages: string[] = [];
+  if (summary) messages.push(...chunkText(formatPortfolioSummary(summary)));
+  messages.push(...buildDigestMessages(fresh));
+
+  if (messages.length === 0) {
+    console.log('[Notifier] Skan zakończony — brak treści do wysłania.');
+    return { scanned, matched: 0, sent: 0, summary };
+  }
+
   let sentOk = false;
-  for (const message of buildDigestMessages(fresh)) {
+  for (const message of messages) {
     sentOk = (await sendTelegramMessage(message)) || sentOk;
   }
 
-  if (sentOk) {
+  if (sentOk && fresh.length) {
     await markAlertsSent(fresh.map(alertKey));
     await recordSignals(fresh);
   }
 
-  console.log(`[Notifier] Skan: ${scanned} celów, ${fresh.length} nowych sygnałów, wysłano=${sentOk}.`);
-  return { scanned, matched: fresh.length, sent: sentOk ? fresh.length : 0 };
+  console.log(`[Notifier] Skan: ${scanned} celów, ${fresh.length} nowych sygnałów, podsumowanie=${!!summary}, wysłano=${sentOk}.`);
+  return { scanned, matched: fresh.length, sent: sentOk ? fresh.length : 0, summary };
 }

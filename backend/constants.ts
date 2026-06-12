@@ -5,6 +5,12 @@ export const MODEL_FAST = 'gemini-3-flash-preview';
 export const MODEL_DEEP = 'gemini-3.5-flash'; // faza Deep: research + Google Search
 export const MODEL_STRUCTURE = 'gemini-3-flash-preview'; // szybkie formatowanie research → JSON (bez search)
 export const MODEL_VALIDATE = 'gemini-3-flash-preview';
+export const MODEL_SUMMARY = MODEL_STRUCTURE; // synteza portfelowa: JSON, bez search
+
+// ─── Domyślna strategia inwestora (edytowalna w UI, trzymana w state.json) ────
+export const DEFAULT_STRATEGY =
+  'Długoterminowe IKE (horyzont 10-15 lat), regularna akumulacja, podejście buy-and-hold. ' +
+  'Spadki traktuję jako okazje do dokupienia, nie panikuję. Priorytet: szeroka dywersyfikacja i niskie koszty.';
 
 export const TRACKED_ETFS: ETF[] = [
   { ticker: 'XNAS.DE', name: 'iShares Nasdaq 100 UCITS ETF', category: 'Technologia USA', description: '100 największych spółek tech z Nasdaq.' },

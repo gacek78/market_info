@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ETF, MarketSignal, GlobalMacroData, Influencer, SignalFilter, LoadingPhase, CacheInfo } from './types';
+import { ETF, MarketSignal, GlobalMacroData, Influencer, SignalFilter, LoadingPhase, CacheInfo, PortfolioSummary as PortfolioSummaryType } from './types';
 import { MarketCard } from './components/MarketCard';
 import { SignalFeed } from './components/SignalFeed';
+import { PortfolioSummary } from './components/PortfolioSummary';
 import {
   fetchMarketIntelligenceFast,
   fetchMarketIntelligenceDeep,
@@ -16,8 +17,12 @@ import {
   saveInfluencer,
   deleteInfluencer as deleteInfluencerApi,
   resetInfluencers as resetInfluencersApi,
+  getStrategy,
+  saveStrategy as saveStrategyApi,
+  getPortfolioSummary,
+  runPortfolioSummary,
 } from './services/apiService';
-import { DEFAULT_INFLUENCERS, TRACKED_ETFS } from './constants';
+import { DEFAULT_INFLUENCERS, TRACKED_ETFS, DEFAULT_STRATEGY } from './constants';
 
 declare global {
   interface AIStudio {
@@ -52,6 +57,11 @@ const App: React.FC = () => {
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
   const [activeFilter, setActiveFilter] = useState<SignalFilter>('ALL');
 
+  // Podsumowanie portfelowe ("Podsumowanie dla mnie")
+  const [strategy, setStrategy] = useState<string>(DEFAULT_STRATEGY);
+  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummaryType | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+
   // Form states
   const [tickerInput, setTickerInput] = useState('');
   const [verifying, setVerifying] = useState(false);
@@ -64,9 +74,16 @@ const App: React.FC = () => {
   useEffect(() => {
     const init = async () => {
       try {
-        const [serverEtfs, serverInfs] = await Promise.all([getEtfs(), getInfluencers()]);
+        const [serverEtfs, serverInfs, serverStrategy, lastSummary] = await Promise.all([
+          getEtfs(),
+          getInfluencers(),
+          getStrategy(),
+          getPortfolioSummary(),
+        ]);
         setEtfs(serverEtfs.length ? serverEtfs : TRACKED_ETFS);
         setInfluencers(serverInfs.length ? serverInfs : DEFAULT_INFLUENCERS);
+        if (serverStrategy) setStrategy(serverStrategy);
+        if (lastSummary) setPortfolioSummary(lastSummary);
       } catch {
         setEtfs(TRACKED_ETFS);
         setInfluencers(DEFAULT_INFLUENCERS);
@@ -189,6 +206,25 @@ const App: React.FC = () => {
     if (confirm('Resetuj listę do domyślnych?')) {
       const defaults = await resetInfluencersApi();
       setInfluencers(defaults.length ? defaults : DEFAULT_INFLUENCERS);
+    }
+  };
+
+  // ─── Podsumowanie portfelowe ──────────────────────────────────────────────
+  const handleSaveStrategy = async (text: string) => {
+    setStrategy(text);
+    await saveStrategyApi(text);
+  };
+
+  const handleGenerateSummary = async () => {
+    if (summaryLoading) return;
+    setSummaryLoading(true);
+    try {
+      const result = await runPortfolioSummary();
+      setPortfolioSummary(result);
+    } catch (err: any) {
+      if (err.message === 'AUTH_REQUIRED') setIsAuthRequired(true);
+    } finally {
+      setSummaryLoading(false);
     }
   };
 
@@ -391,6 +427,17 @@ const App: React.FC = () => {
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Podsumowanie portfelowe ("Podsumowanie dla mnie") — widok GLOBAL */}
+          {selectedEtf === 'GLOBAL' && (
+            <PortfolioSummary
+              summary={portfolioSummary}
+              strategy={strategy}
+              loading={summaryLoading}
+              onGenerate={handleGenerateSummary}
+              onSaveStrategy={handleSaveStrategy}
+            />
           )}
 
           {/* Intelligence Feed */}
