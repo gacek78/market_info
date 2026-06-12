@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-"Sentinel IKE" / Market Info — an AI market-monitoring app for a Polish IKE (retirement account) investor on the XTB broker. The backend orchestrates Google Gemini calls (with Google Search grounding) over a watchlist of ETFs/stocks and tracked finance influencers, fuses in real market quotes, and emits "signals". The frontend renders those signals; a backend cron can push high-severity signals to Telegram. UI text, prompts, and most comments are in Polish.
+Market Info — an AI market-monitoring app for a Polish IKE (retirement account) investor on the XTB broker. (The UI brand is "Market Info"; some backend code/logs still reference the legacy name "Sentinel IKE".) The backend orchestrates Google Gemini calls (with Google Search grounding) over a watchlist of ETFs/stocks and tracked finance influencers, fuses in real market quotes, and emits "signals". The frontend renders those signals; a backend cron can push high-severity signals to Telegram. UI text, prompts, and most comments are in Polish.
 
 ## Architecture
 
@@ -26,7 +26,7 @@ Quotes are fetched from free, keyless endpoints and injected into the Deep resea
 Single JSON file at `DATA_DIR` (default `backend/data/state.json`, git-ignored, Docker volume-mounted to survive restarts). Holds ETFs, influencers, sent-alert dedup keys, and a recent-signals history. Lazy-loaded singleton with a serialized write-lock. Seeds from `TRACKED_ETFS` / `DEFAULT_INFLUENCERS` in `backend/constants.ts` on first run.
 
 ### Notifications (`backend/notifier.ts`)
-`node-cron` (schedule `ALERT_CRON`) runs `runAlertScan()`: deep-analyzes GLOBAL + every tracked ETF, keeps signals at/above `ALERT_SEVERITY`, drops already-sent ones (dedup via `alertKey`), and sends an HTML digest to Telegram (chunked under Telegram's ~4096-char limit). Disabled unless both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set.
+`node-cron` (schedule `ALERT_CRON`) runs `runAlertScan()`: deep-analyzes GLOBAL + every tracked ETF, keeps signals at/above `ALERT_SEVERITY`, drops already-sent ones (dedup via `alertKey`), and sends an HTML digest to Telegram (chunked under Telegram's ~4096-char limit). Disabled unless both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set. `ALERT_CRON` accepts **multiple `;`-separated cron expressions** (e.g. `0 5 * * *;55 13 * * *` = scans at 05:00 and 13:55) — `index.ts` splits on `;` and schedules each. Schedules run in **Polish local time**: `docker-compose.yml` sets `TZ=Europe/Warsaw` and the backend image installs `tzdata` (alpine otherwise ignores `TZ`, so cron would fire in UTC).
 
 ### Frontend specifics
 - `apiService.ts` owns a **sessionStorage cache** (`CACHE_TTL_MS`, 1h) — only Deep results are cached. It also computes signal `priority` by age and `getSourceCredibility` against the `TRUSTED_SOURCES` map. Google grounding wraps the real URL in a `vertexaisearch` redirect, so the true domain is parsed from the source **title**, not the URI.
@@ -39,6 +39,7 @@ Single JSON file at `DATA_DIR` (default `backend/data/state.json`, git-ignored, 
 - **Constants are duplicated**: `TRACKED_ETFS` / `DEFAULT_INFLUENCERS` exist in both `backend/constants.ts` and `frontend/constants.ts` (frontend copies are fallbacks only). Keep them in sync if editing.
 - Forcing JSON output disables Gemini search — never add `responseMimeType: 'application/json'` to a call that needs `googleSearch`; use the two-step research→structure pattern instead.
 - The Gemini API key env var is **`API_KEY`** on the backend (and `GEMINI_API_KEY` is mapped to `process.env.API_KEY` in `frontend/vite.config.ts`).
+- Both compose services set `restart: unless-stopped`. **Production** runs on a home NAS under `docker compose` (V2) at `/compose/market_info`; deploy = `git pull` + `docker compose up -d --force-recreate <svc>` (frontend uses vite with a mounted volume, so no image rebuild needed for code; rebuild only when the Dockerfile changes). The server's `.env` is **separate and git-ignored** — `ALERT_CRON`/secrets must be edited on the server, never committed.
 
 ## Commands
 
@@ -72,4 +73,4 @@ There is no test suite, linter, or typecheck script configured. `buildDigestMess
 
 ## Environment variables
 
-`API_KEY` (Gemini, required) · `TELEGRAM_BOT_TOKEN` · `TELEGRAM_CHAT_ID` · `ALERT_SEVERITY` (`low|medium|high`, default `high`) · `ALERT_CRON` (default `0 8 * * *`) · `DATA_DIR` · `PORT`. See `.env.example`.
+`API_KEY` (Gemini, required) · `TELEGRAM_BOT_TOKEN` · `TELEGRAM_CHAT_ID` · `ALERT_SEVERITY` (`low|medium|high`, default `high`) · `ALERT_CRON` (default `0 8 * * *`; supports multiple `;`-separated expressions) · `TZ` (set to `Europe/Warsaw` in compose) · `DATA_DIR` · `PORT`. See `.env.example`.
