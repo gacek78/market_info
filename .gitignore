@@ -9,3 +9,6 @@ dist/
 
 # Trwały stan backendu (ETF-y, influencerzy, historia alertów)
 backend/data/
+
+# Pliki robocze (zrzuty ekranu itp.)
+pliki/
