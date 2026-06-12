@@ -17,19 +17,24 @@ function getRelativeTime(date: Date): string {
   return `${diffD}d temu`;
 }
 
-function getCredibilityBadge(uri: string, title?: string): React.JSX.Element {
-  const cred = getSourceCredibility(uri, title);
-  
+function getCredibilityBadge(uri: string, title?: string, domain?: string): React.JSX.Element {
+  const cred = getSourceCredibility(uri, title, domain);
+
   let displayName = '';
-  try {
-    const url = new URL(uri);
-    displayName = url.hostname.replace('www.', '');
-    // If it's a vertexaisearch redirect, use the parsed title instead of the raw host
-    if (displayName.includes('vertexaisearch') && title && title !== 'Web Reference') {
-      displayName = title.length > 35 ? title.slice(0, 32) + '...' : title;
+  if (domain) {
+    // Domena rozwiązana przez backend — najczytelniejsza nazwa źródła.
+    displayName = domain.replace(/^www\./, '');
+  } else {
+    try {
+      const url = new URL(uri);
+      displayName = url.hostname.replace('www.', '');
+      // If it's a vertexaisearch redirect, use the parsed title instead of the raw host
+      if (displayName.includes('vertexaisearch') && title && title !== 'Web Reference') {
+        displayName = title.length > 35 ? title.slice(0, 32) + '...' : title;
+      }
+    } catch {
+      displayName = title || uri.slice(0, 20);
     }
-  } catch {
-    displayName = title || uri.slice(0, 20);
   }
 
   if (cred === 'high') return (
@@ -99,6 +104,22 @@ export const SignalItem: React.FC<SignalItemProps> = ({ signal }) => {
               LIVE
             </span>
           )}
+          {signal.phase === 'fast' && (
+            <span
+              title="Faza 1 — szacunek z wiedzy modelu, bez wyszukiwania w internecie"
+              className="text-[9px] px-2 py-0.5 rounded-full border uppercase font-bold bg-amber-500/15 text-amber-400 border-amber-500/40"
+            >
+              ⚡ Szacunek · niezweryfikowane
+            </span>
+          )}
+          {signal.verified === false && (
+            <span
+              title="Walidacja przez wyszukiwarkę nie potwierdziła tego sygnału"
+              className="text-[9px] px-2 py-0.5 rounded-full border uppercase font-bold bg-red-500/15 text-red-400 border-red-500/40"
+            >
+              ✗ Niepotwierdzone
+            </span>
+          )}
         </div>
         <div className="flex flex-col items-end">
           <span className="text-[10px] text-slate-400 font-mono">{relTime}</span>
@@ -130,7 +151,7 @@ export const SignalItem: React.FC<SignalItemProps> = ({ signal }) => {
               rel="noopener noreferrer"
               className="text-[9px] font-bold text-slate-400 hover:text-blue-400 flex items-center gap-1.5 bg-slate-900/80 hover:bg-slate-900 px-2.5 py-1.5 rounded-lg border border-slate-700/50 transition-colors"
             >
-              {getCredibilityBadge(source.uri, source.title)}
+              {getCredibilityBadge(source.uri, source.title, source.domain)}
             </a>
           ))}
         </div>

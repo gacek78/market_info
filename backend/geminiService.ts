@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
-import { MarketIntelligenceResponse } from "./types";
+import { MarketIntelligenceResponse, MarketSignal } from "./types";
 import { ETF, Influencer } from "./types";
-import { fetchMarketQuotes, fetchTickerPrice } from "./marketData";
+import { fetchMarketQuotes, fetchTickerPrice, resolveRedirect } from "./marketData";
 import { MODEL_FAST, MODEL_DEEP, MODEL_STRUCTURE, MODEL_VALIDATE } from "./constants";
 
 const getAI = () => {
@@ -194,11 +194,27 @@ export const fetchMarketIntelligenceDeep = async (
     });
 
     const researchText = research.text ?? '';
-    const searchSources =
+    const rawSources =
       research.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => ({
         title: chunk.web?.title || 'Web Reference',
         uri: chunk.web?.uri || '#',
       })) || [];
+
+    // Google grounding daje redirect `vertexaisearch` zamiast prawdziwego URL-a,
+    // a `title` to często sama nazwa serwisu bez domeny — przez co frontend nie
+    // umiał ocenić wiarygodności (wszystko ❓). Rozwiązujemy redirect na realny
+    // URL + domenę, żeby kredytowanie i klikalne linki faktycznie działały.
+    const searchSources = await Promise.all(
+      rawSources.map(async (s) => {
+        const resolved = s.uri && s.uri !== '#' ? await resolveRedirect(s.uri) : null;
+        const fromTitle = s.title.toLowerCase().match(/[a-z0-9-]+\.[a-z.]{2,}/)?.[0];
+        return {
+          title: s.title,
+          uri: resolved?.finalUrl ?? s.uri,
+          domain: resolved?.domain ?? fromTitle,
+        };
+      }),
+    );
 
     // KROK 2 — STRUKTURYZACJA: zamień research na czysty JSON (bez search → można JSON mode).
     const structurePrompt = `
@@ -256,16 +272,18 @@ export const fetchMarketIntelligenceDeep = async (
       sources: searchSources.slice(0, 5),
     };
 
+    const deepSignals: MarketSignal[] = (data.signals || []).map((s: any) => ({
+      ...s,
+      id: Math.random().toString(36).substr(2, 9),
+      timestamp: new Date(),
+      ticker: isGlobal ? 'GLOBAL' : (target as ETF).ticker,
+      sources: searchSources.slice(0, 3),
+      phase: 'deep' as const,
+      priority: s.priority || 'DZIS',
+    }));
+
     return {
-      signals: (data.signals || []).map((s: any) => ({
-        ...s,
-        id: Math.random().toString(36).substr(2, 9),
-        timestamp: new Date(),
-        ticker: isGlobal ? 'GLOBAL' : (target as ETF).ticker,
-        sources: searchSources.slice(0, 3),
-        phase: 'deep' as const,
-        priority: s.priority || 'DZIS',
-      })),
+      signals: await verifyHighSeveritySignals(deepSignals),
       calendar: [],
       globalData: mergedGlobal,
     };
@@ -274,6 +292,51 @@ export const fetchMarketIntelligenceDeep = async (
     if (isAuthError(error)) throw new Error('AUTH_REQUIRED');
     return { signals: [], calendar: [] };
   }
+};
+
+// ─── WALIDACJA SYGNAŁÓW (anty-halucynacja) ───────────────────────────────────
+/**
+ * Weryfikuje sygnały wysokiej wagi osobnym wywołaniem z Google Search.
+ * Faza Deep struktury potrafi wyolbrzymić lub zmyślić tytuł mimo grounding —
+ * tu sprawdzamy każdy `high`-severity przez wyszukiwarkę i ustawiamy `verified`.
+ *
+ * Sterowane env `VALIDATE_SIGNALS`:
+ *   - 'false' / '0'  → wyłączone (brak dodatkowych wywołań),
+ *   - w innym wypadku → walidujemy tylko sygnały high-severity (domyślnie).
+ */
+export const verifyHighSeveritySignals = async (
+  signals: MarketSignal[],
+): Promise<MarketSignal[]> => {
+  if ((process.env.VALIDATE_SIGNALS ?? '').toLowerCase() === 'false' ||
+      process.env.VALIDATE_SIGNALS === '0') {
+    return signals;
+  }
+
+  const ai = getAI();
+  return Promise.all(
+    signals.map(async (s) => {
+      if (s.severity !== 'high') return s;
+      try {
+        const prompt = `
+          Zweryfikuj przez Google Search, czy poniższe twierdzenie rynkowe jest
+          PRAWDZIWE i AKTUALNE (nie zmyślone, zgodne z faktami):
+          Tytuł: "${s.title}"
+          Opis: "${s.summary}"
+          ZWRÓĆ WYŁĄCZNIE JSON: { "verified": true|false, "note": "krótkie uzasadnienie" }
+        `;
+        const response = await ai.models.generateContent({
+          model: MODEL_VALIDATE,
+          contents: prompt,
+          config: { tools: [{ googleSearch: {} }] },
+        });
+        const data = extractJson<{ verified?: boolean }>(response.text);
+        // Brak jednoznacznej odpowiedzi traktujemy jako "nie udało się potwierdzić".
+        return { ...s, verified: data?.verified === true };
+      } catch {
+        return { ...s, verified: false };
+      }
+    }),
+  );
 };
 
 // ─── VALIDATE TICKER ──────────────────────────────────────────────────────────

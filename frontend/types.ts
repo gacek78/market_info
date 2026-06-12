@@ -21,11 +21,13 @@ export interface MarketSignal {
   summary: string;
   longTermImpact?: string;
   timestamp: Date;
-  sources: { title: string; uri: string }[];
+  sources: { title: string; uri: string; domain?: string }[];
   /** Faza AI ktora wygenerowala sygnal */
   phase?: SignalPhase;
   /** Obliczany priorytet dla filtrow */
   priority?: SignalPriority;
+  /** Walidacja high-severity (VALIDATE_SIGNALS): false = niepotwierdzone przez wyszukiwarke */
+  verified?: boolean;
 }
 
 export interface EconomicEvent {
@@ -52,7 +54,7 @@ export interface GlobalMacroData {
   ratesUs: string;
   sentiment: number;
   risk: number;
-  sources: { title: string; uri: string }[];
+  sources: { title: string; uri: string; domain?: string }[];
 }
 
 export interface MarketIntelligenceResponse {

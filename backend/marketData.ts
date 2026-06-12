@@ -118,6 +118,39 @@ async function fetchVix(): Promise<number | null> {
 }
 
 /**
+ * Rozwiązuje przekierowanie (np. Google grounding `vertexaisearch`) do realnego URL-a.
+ * Google grounding zwraca link-redirect, więc nie znamy z niego prawdziwej domeny —
+ * podążamy za przekierowaniem i wyciągamy hostname z `res.url`.
+ * Best-effort: przy błędzie / dalej-redirekcie zwraca null (nie rzuca).
+ */
+export async function resolveRedirect(
+  url: string,
+): Promise<{ finalUrl: string; domain: string } | null> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const res = await fetch(url, {
+      redirect: 'follow',
+      signal: controller.signal,
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        Accept: 'text/html,application/xhtml+xml,*/*',
+      },
+    });
+    clearTimeout(timeout);
+
+    const finalUrl = res.url || url;
+    const host = new URL(finalUrl).hostname.replace(/^www\./, '');
+    // Jeśli nadal jesteśmy na redirekcie Google, domena jest bezużyteczna.
+    if (host.includes('vertexaisearch') || host.includes('google')) return null;
+    return { finalUrl, domain: host };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Mapuje ticker z aplikacji na symbol Stooq i pobiera cenę.
  * Best-effort — jeśli się nie uda, zwraca null (AI dostanie wtedy mniej danych,
  * ale analiza i tak się wykona).

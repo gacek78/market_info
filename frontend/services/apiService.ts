@@ -1,15 +1,17 @@
 import { ETF, Influencer, MarketIntelligenceResponse, MarketSignal, SignalPriority } from '../types';
-import { CACHE_TTL_MS, TRUSTED_SOURCES } from '../constants';
+import { CACHE_TTL_MS, TRUSTED_SOURCES, SOURCE_NAME_ALIASES } from '../constants';
 
 const API_BASE_URL = 'http://192.168.88.8:3010';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Source credibility helper
 // ─────────────────────────────────────────────────────────────────────────────
-export function getSourceCredibility(uri: string, title?: string): 'high' | 'medium' | 'unknown' {
-  // Google grounding opakowuje prawdziwy URL w przekierowanie vertexaisearch,
-  // więc realna domena (np. "pap.pl") jest w `title` — to z niej liczymy wiarygodność.
+export function getSourceCredibility(uri: string, title?: string, domain?: string): 'high' | 'medium' | 'unknown' {
+  // Najpewniejsza jest domena rozwiązana przez backend (z redirectu vertexaisearch).
+  // Gdy jej brak — odtwarzamy z URI/tytułu, a w ostateczności z aliasu nazwy serwisu.
   const candidates: string[] = [];
+
+  if (domain) candidates.push(domain.replace(/^www\./, ''));
 
   try {
     const host = new URL(uri).hostname.replace(/^www\./, '');
@@ -19,8 +21,13 @@ export function getSourceCredibility(uri: string, title?: string): 'high' | 'med
   }
 
   if (title) {
-    const match = title.toLowerCase().trim().replace(/^www\./, '').match(/[a-z0-9-]+\.[a-z.]{2,}/);
+    const t = title.toLowerCase().trim().replace(/^www\./, '');
+    const match = t.match(/[a-z0-9-]+\.[a-z.]{2,}/);
     if (match) candidates.push(match[0]);
+    // Tytuł bez kropki (np. "Reuters") — spróbuj zmapować nazwę serwisu na domenę.
+    for (const [name, dom] of Object.entries(SOURCE_NAME_ALIASES)) {
+      if (t.includes(name)) candidates.push(dom);
+    }
   }
 
   for (const domain of candidates) {

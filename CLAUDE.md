@@ -29,7 +29,8 @@ Single JSON file at `DATA_DIR` (default `backend/data/state.json`, git-ignored, 
 `node-cron` (schedule `ALERT_CRON`) runs `runAlertScan()`: deep-analyzes GLOBAL + every tracked ETF, keeps signals at/above `ALERT_SEVERITY`, drops already-sent ones (dedup via `alertKey`), and sends an HTML digest to Telegram (chunked under Telegram's ~4096-char limit). Disabled unless both `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set. `ALERT_CRON` accepts **multiple `;`-separated cron expressions** (e.g. `0 5 * * *;55 13 * * *` = scans at 05:00 and 13:55) — `index.ts` splits on `;` and schedules each. Schedules run in **Polish local time**: `docker-compose.yml` sets `TZ=Europe/Warsaw` and the backend image installs `tzdata` (alpine otherwise ignores `TZ`, so cron would fire in UTC).
 
 ### Frontend specifics
-- `apiService.ts` owns a **sessionStorage cache** (`CACHE_TTL_MS`, 1h) — only Deep results are cached. It also computes signal `priority` by age and `getSourceCredibility` against the `TRUSTED_SOURCES` map. Google grounding wraps the real URL in a `vertexaisearch` redirect, so the true domain is parsed from the source **title**, not the URI.
+- `apiService.ts` owns a **sessionStorage cache** (`CACHE_TTL_MS`, 1h) — only Deep results are cached. It also computes signal `priority` by age and `getSourceCredibility` against the `TRUSTED_SOURCES` map. Google grounding wraps the real URL in a `vertexaisearch` redirect, so the backend (`resolveRedirect` in `marketData.ts`) follows it to the real URL and stores the resolved `domain` on each source; `getSourceCredibility` prefers that `domain`, then falls back to parsing the URI/title and finally the `SOURCE_NAME_ALIASES` map (e.g. "Reuters" → reuters.com).
+- **Signal trust markers**: Fast (Faza 1) signals are model-knowledge-only and get a `⚡ Szacunek · niezweryfikowane` badge. Deep high-severity signals are re-checked via `verifyHighSeveritySignals` (`MODEL_VALIDATE` + Google Search, gated by `VALIDATE_SIGNALS`); a failed check sets `verified: false` → `✗ Niepotwierdzone` badge in the UI and the signal is dropped from Telegram alerts.
 - `App.tsx` orchestrates: load ETFs/influencers from backend → Fast → Deep, with an AI Studio API-key auth gate (`window.aistudio`).
 
 ## Important gotchas
@@ -75,4 +76,4 @@ There is no test suite, linter, or typecheck script configured. `buildDigestMess
 
 ## Environment variables
 
-`API_KEY` (Gemini, required) · `TELEGRAM_BOT_TOKEN` · `TELEGRAM_CHAT_ID` · `ALERT_SEVERITY` (`low|medium|high`, default `high`) · `ALERT_CRON` (default `0 8 * * *`; supports multiple `;`-separated expressions) · `TZ` (set to `Europe/Warsaw` in compose) · `DATA_DIR` · `PORT`. See `.env.example`.
+`API_KEY` (Gemini, required) · `TELEGRAM_BOT_TOKEN` · `TELEGRAM_CHAT_ID` · `ALERT_SEVERITY` (`low|medium|high`, default `high`) · `ALERT_CRON` (default `0 8 * * *`; supports multiple `;`-separated expressions) · `VALIDATE_SIGNALS` (anti-hallucination check of high-severity signals; set `false`/`0` to disable, default on) · `TZ` (set to `Europe/Warsaw` in compose) · `DATA_DIR` · `PORT`. See `.env.example`.

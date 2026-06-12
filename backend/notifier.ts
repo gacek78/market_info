@@ -131,6 +131,11 @@ export async function runAlertScan(): Promise<ScanResult> {
       for (const sig of result.signals) {
         const rank = SEVERITY_RANK[sig.severity] ?? 0;
         if (rank < minRank) continue;
+        // Nie wysyłamy na Telegram sygnałów, które walidacja odrzuciła jako niepotwierdzone.
+        if (sig.verified === false) {
+          console.log(`[Notifier] Pomijam niepotwierdzony sygnał: ${sig.title}`);
+          continue;
+        }
         if (await wasAlertSent(alertKey(sig))) continue;
         fresh.push(sig);
       }

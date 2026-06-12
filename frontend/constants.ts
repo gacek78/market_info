@@ -78,5 +78,34 @@ export const TRUSTED_SOURCES: Record<string, 'high' | 'medium'> = {
   'businessinsider.com': 'medium',
 };
 
+// Aliasy nazw serwisów → domena. Google grounding bywa, że w `title` podaje samą
+// nazwę bez kropki (np. „Reuters"), więc regex domeny nie trafia — wtedy mapujemy
+// nazwę na domenę, żeby kredytowanie i tak zadziałało (fallback, gdy backend nie
+// rozwiązał domeny z redirectu vertexaisearch).
+export const SOURCE_NAME_ALIASES: Record<string, string> = {
+  reuters: 'reuters.com',
+  bloomberg: 'bloomberg.com',
+  'financial times': 'ft.com',
+  ft: 'ft.com',
+  'wall street journal': 'wsj.com',
+  wsj: 'wsj.com',
+  economist: 'economist.com',
+  pap: 'pap.pl',
+  bankier: 'bankier.pl',
+  parkiet: 'parkiet.com',
+  bbc: 'bbc.com',
+  'associated press': 'apnews.com',
+  cnbc: 'cnbc.com',
+  marketwatch: 'marketwatch.com',
+  money: 'money.pl',
+  stooq: 'stooq.pl',
+  stockwatch: 'stockwatch.pl',
+  'strefa inwestorów': 'strefainwestorow.pl',
+  comparic: 'comparic.pl',
+  'seeking alpha': 'seekingalpha.com',
+  investing: 'investing.com',
+  'business insider': 'businessinsider.com',
+};
+
 // ─── Cache TTL ────────────────────────────────────────────────────────────────
 export const CACHE_TTL_MS = 60 * 60 * 1000; // 1 godzina

@@ -360,28 +360,28 @@ const App: React.FC = () => {
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Waluty</span>
                     <div className="text-xl font-mono font-bold text-white">
-                      {globalData.usdPln} <span className="text-[10px] opacity-40">USD/PLN</span>
+                      {globalData.usdPln} <span className="text-[11px] font-semibold text-slate-400 tracking-wide">USD/PLN</span>
                     </div>
                     <div className="text-xl font-mono font-bold text-white">
-                      {globalData.eurPln} <span className="text-[10px] opacity-40">EUR/PLN</span>
+                      {globalData.eurPln} <span className="text-[11px] font-semibold text-slate-400 tracking-wide">EUR/PLN</span>
                     </div>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Inflacja</span>
                     <div className="text-xl font-mono font-bold text-red-400">
-                      {globalData.cpiPl} <span className="text-[10px] opacity-40">PL</span>
+                      {globalData.cpiPl} <span className="text-[11px] font-semibold text-slate-400 tracking-wide">PL</span>
                     </div>
                     <div className="text-xl font-mono font-bold text-red-400">
-                      {globalData.cpiUs} <span className="text-[10px] opacity-40">US</span>
+                      {globalData.cpiUs} <span className="text-[11px] font-semibold text-slate-400 tracking-wide">US</span>
                     </div>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Stopy</span>
                     <div className="text-xl font-mono font-bold text-blue-400">
-                      {globalData.ratesPl} <span className="text-[10px] opacity-40">NBP</span>
+                      {globalData.ratesPl} <span className="text-[11px] font-semibold text-slate-400 tracking-wide">NBP</span>
                     </div>
                     <div className="text-xl font-mono font-bold text-blue-400">
-                      {globalData.ratesUs} <span className="text-[10px] opacity-40">FED</span>
+                      {globalData.ratesUs} <span className="text-[11px] font-semibold text-slate-400 tracking-wide">FED</span>
                     </div>
                   </div>
                   <div>

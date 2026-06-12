@@ -22,9 +22,11 @@ export interface MarketSignal {
   summary: string;
   longTermImpact?: string;
   timestamp: Date;
-  sources: { title: string; uri: string }[];
+  sources: { title: string; uri: string; domain?: string }[];
   phase?: 'fast' | 'deep';
   priority?: 'DZIS' | 'TYDZIEN' | 'MIESIAC';
+  /** Ustawiane przez walidację high-severity (VALIDATE_SIGNALS). false = niepotwierdzone. */
+  verified?: boolean;
 }
 
 export interface GlobalMacroData {
@@ -38,7 +40,7 @@ export interface GlobalMacroData {
   ratesUs: string;
   sentiment: number;
   risk: number;
-  sources: { title: string; uri: string }[];
+  sources: { title: string; uri: string; domain?: string }[];
 }
 
 export interface MarketIntelligenceResponse {
