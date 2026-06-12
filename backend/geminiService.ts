@@ -216,6 +216,11 @@ export const fetchMarketIntelligenceDeep = async (
       }),
     );
 
+    // Ponumerowana lista źródeł — model przy każdym sygnale wskaże, które go potwierdzają.
+    const sourceList = searchSources
+      .map((s, i) => `[${i + 1}] ${s.domain ?? s.title}`)
+      .join('\n');
+
     // KROK 2 — STRUKTURYZACJA: zamień research na czysty JSON (bez search → można JSON mode).
     const structurePrompt = `
       Na podstawie PONIŻSZEJ ANALIZY zamień ją na sygnały rynkowe. NIE dodawaj informacji
@@ -223,7 +228,18 @@ export const fetchMarketIntelligenceDeep = async (
 
       ANALIZA:
       ${researchText}
+${
+  sourceList
+    ? `
+      DOSTĘPNE ŹRÓDŁA (numeruj od 1):
+      ${sourceList}
 
+      Dla KAŻDEGO sygnału w polu "sourceIndices" podaj numery TYLKO tych źródeł, które
+      potwierdzają DOKŁADNIE tę konkretną informację (zwykle 1-2). Nie wrzucaj wszystkich
+      źródeł do każdego sygnału. Gdy nie da się przypisać żadnego — podaj pustą listę [].
+`
+    : ''
+}
       ZASADY dla globalData (wyciągnij z sekcji "DANE MAKRO" oraz reszty analizy):
       - "cpiUs" = inflacja CPI USA r/r jako LICZBA z % (np. "4.2%").
       - "cpiPl" = inflacja CPI Polska r/r jako LICZBA z % (np. "3.1%").
@@ -247,7 +263,8 @@ export const fetchMarketIntelligenceDeep = async (
             "priority": "DZIS|TYDZIEN|MIESIAC",
             "title": "Tytuł sygnału",
             "summary": "Konkretny opis z datą",
-            "longTermImpact": "Dlaczego to ważne dla emerytalnego IKE"
+            "longTermImpact": "Dlaczego to ważne dla emerytalnego IKE",
+            "sourceIndices": [1]
           }
         ]
       }
@@ -272,15 +289,33 @@ export const fetchMarketIntelligenceDeep = async (
       sources: searchSources.slice(0, 5),
     };
 
-    const deepSignals: MarketSignal[] = (data.signals || []).map((s: any) => ({
-      ...s,
-      id: Math.random().toString(36).substr(2, 9),
-      timestamp: new Date(),
-      ticker: isGlobal ? 'GLOBAL' : (target as ETF).ticker,
-      sources: searchSources.slice(0, 3),
-      phase: 'deep' as const,
-      priority: s.priority || 'DZIS',
-    }));
+    const deepSignals: MarketSignal[] = (data.signals || []).map((s: any) => {
+      // Przypisz każdemu sygnałowi TYLKO źródła wskazane przez model (sourceIndices,
+      // numerowane od 1), zamiast dolepiać wszystkim tę samą trójkę. Indeksy spoza
+      // zakresu i duplikaty odrzucamy; brak wskazań → brak źródeł (uczciwiej niż mylące).
+      const idxs: number[] = Array.isArray(s.sourceIndices) ? s.sourceIndices : [];
+      const picked = [...new Set(idxs)]
+        .map((n) => searchSources[Number(n) - 1])
+        .filter((x): x is (typeof searchSources)[number] => !!x)
+        .slice(0, 3);
+      const { sourceIndices, ...rest } = s;
+      return {
+        ...rest,
+        id: Math.random().toString(36).substr(2, 9),
+        timestamp: new Date(),
+        ticker: isGlobal ? 'GLOBAL' : (target as ETF).ticker,
+        sources: picked,
+        phase: 'deep' as const,
+        priority: s.priority || 'DZIS',
+      };
+    });
+
+    // Zabezpieczenie: gdy model całkiem zignorował sourceIndices (żaden sygnał nie
+    // dostał źródła), nie zostawiamy feedu bez źródeł — wracamy do top-3 dla każdego.
+    if (searchSources.length > 0 && deepSignals.every((s) => s.sources.length === 0)) {
+      const top = searchSources.slice(0, 3);
+      deepSignals.forEach((s) => { s.sources = top; });
+    }
 
     return {
       signals: await verifyHighSeveritySignals(deepSignals),
