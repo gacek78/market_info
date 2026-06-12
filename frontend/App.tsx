@@ -216,7 +216,7 @@ const App: React.FC = () => {
   if (isAuthRequired) {
     return (
       <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-6 text-center">
-        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-[32px] p-10 shadow-2xl">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-10 shadow-2xl">
           <div className="w-20 h-20 bg-blue-600/20 rounded-3xl flex items-center justify-center mx-auto mb-8">
             <svg className="w-10 h-10 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
@@ -246,10 +246,10 @@ const App: React.FC = () => {
         {/* Logo */}
         <div className="flex items-center gap-3 mb-10">
           <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-600/40 font-black text-white">
-            X
+            M
           </div>
           <div>
-            <h1 className="font-bold text-lg leading-tight">Sentinel IKE</h1>
+            <h1 className="font-bold text-lg leading-tight">Market Info</h1>
             <p className="text-[10px] text-blue-400 uppercase font-black tracking-widest italic">
               v3.2 · Two-Phase AI
             </p>
@@ -324,7 +324,7 @@ const App: React.FC = () => {
           <div>
             <div className="flex items-center gap-3 mb-3">
               <h2 className="text-3xl font-black text-white">
-                {selectedEtf === 'GLOBAL' ? 'Global Analysis' : (selectedEtf as ETF).name}
+                {selectedEtf === 'GLOBAL' ? 'Analiza Globalna' : (selectedEtf as ETF).name}
               </h2>
               <span className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-full text-[10px] font-bold border border-blue-500/30 uppercase">
                 {selectedEtf === 'GLOBAL' ? 'Macro' : (selectedEtf as ETF).ticker}
@@ -348,11 +348,11 @@ const App: React.FC = () => {
         <section className="space-y-10">
           {/* Global macro bar */}
           {selectedEtf === 'GLOBAL' && globalData && (
-            <div className="bg-slate-900 border border-slate-800 rounded-[32px] overflow-hidden shadow-2xl border-b-4 border-b-blue-600">
+            <div className="bg-slate-900 border border-slate-800 border-l-4 border-l-blue-500 rounded-3xl overflow-hidden shadow-2xl">
               <div className="p-8">
                 <div className="flex items-center gap-3 mb-8">
-                  <div className="w-1.5 h-6 bg-blue-500 rounded-full" />
-                  <h3 className="text-xs font-black text-blue-400 uppercase tracking-[0.3em]">
+                  <div className="w-1.5 h-5 bg-blue-500 rounded-full" />
+                  <h3 className="text-xs font-black text-blue-400 uppercase tracking-widest">
                     Status Rynku (GLOBAL)
                   </h3>
                 </div>
@@ -360,10 +360,10 @@ const App: React.FC = () => {
                   <div>
                     <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Waluty</span>
                     <div className="text-xl font-mono font-bold text-white">
-                      {globalData.usdPln} <span className="text-[10px] opacity-40">USD</span>
+                      {globalData.usdPln} <span className="text-[10px] opacity-40">USD/PLN</span>
                     </div>
                     <div className="text-xl font-mono font-bold text-white">
-                      {globalData.eurPln} <span className="text-[10px] opacity-40">EUR</span>
+                      {globalData.eurPln} <span className="text-[10px] opacity-40">EUR/PLN</span>
                     </div>
                   </div>
                   <div>
@@ -376,30 +376,20 @@ const App: React.FC = () => {
                     </div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Stopy (NBP/FED)</span>
-                    <div className="text-xl font-mono font-bold text-blue-400">{globalData.ratesPl}</div>
-                    <div className="text-xl font-mono font-bold text-blue-400">{globalData.ratesUs}</div>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Stopy</span>
+                    <div className="text-xl font-mono font-bold text-blue-400">
+                      {globalData.ratesPl} <span className="text-[10px] opacity-40">NBP</span>
+                    </div>
+                    <div className="text-xl font-mono font-bold text-blue-400">
+                      {globalData.ratesUs} <span className="text-[10px] opacity-40">FED</span>
+                    </div>
                   </div>
                   <div>
-                    <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Risk (VIX)</span>
+                    <span className="text-[10px] text-slate-500 font-bold uppercase block mb-2">Ryzyko (VIX)</span>
                     <div className="text-xl font-mono font-bold text-amber-500">{globalData.vix}</div>
                   </div>
                 </div>
               </div>
-            </div>
-          )}
-
-          {/* Ticker context */}
-          {typeof selectedEtf !== 'string' && (
-            <div className="p-8 bg-blue-900/10 border border-blue-500/20 rounded-[32px] shadow-xl border-l-8 border-l-blue-600">
-              <h4 className="text-xs font-black text-blue-400 uppercase tracking-widest mb-2 underline decoration-blue-500/50 underline-offset-4">
-                Ticker Insights: {(selectedEtf as ETF).ticker}
-              </h4>
-              <p className="text-slate-300 text-sm leading-relaxed">
-                Analiza sektorowa dla{' '}
-                <span className="text-blue-400 font-bold">{(selectedEtf as ETF).category}</span>.
-                Sygnały są filtrowane pod kątem korelacji z ceną tego aktywa.
-              </p>
             </div>
           )}
 
@@ -410,7 +400,6 @@ const App: React.FC = () => {
             activeFilter={activeFilter}
             onFilterChange={setActiveFilter}
             cacheInfo={cacheInfo}
-            onForceRefresh={() => runTwoPhase(selectedEtf, true)}
           />
         </section>
       </main>
@@ -419,10 +408,13 @@ const App: React.FC = () => {
       <aside className="w-full lg:w-80 border-l border-slate-800/50 p-6 bg-slate-900/10 flex flex-col gap-8 overflow-y-auto">
 
         {/* Sentiment radar */}
-        <div className="p-6 bg-blue-900/10 border border-blue-500/20 rounded-3xl shadow-lg">
-          <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-6">
-            Radar Sentymentu
-          </h4>
+        <div className="p-6 bg-blue-900/10 border border-blue-500/20 border-l-4 border-l-blue-500 rounded-3xl shadow-lg">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="w-1.5 h-5 bg-blue-500 rounded-full" />
+            <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+              Radar Sentymentu
+            </h4>
+          </div>
           <div className="space-y-6">
             <div>
               <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
@@ -454,9 +446,12 @@ const App: React.FC = () => {
         {/* Social radar */}
         <div className="p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-xl">
           <div className="flex justify-between items-center mb-6">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Radar Społeczny
-            </h4>
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-5 bg-blue-500 rounded-full" />
+              <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                Radar Społeczny
+              </h4>
+            </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowInfForm(!showInfForm)}
@@ -529,7 +524,7 @@ const App: React.FC = () => {
         <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-3xl opacity-60 mt-auto">
           <h4 className="text-[10px] font-black text-slate-500 uppercase mb-2">IKE Rule #1</h4>
           <p className="text-[10px] text-slate-400 italic">
-            "Gdy wszyscy kupują w euforii, Sentinel ostrzega. Gdy krew się leje, Sentinel szuka okazji."
+            "Gdy wszyscy kupują w euforii — ostrożnie. Gdy krew się leje — szukaj okazji."
           </p>
         </div>
       </aside>
@@ -538,7 +533,7 @@ const App: React.FC = () => {
       <footer className="fixed bottom-0 left-0 right-0 h-10 bg-black/80 backdrop-blur-md border-t border-slate-800/50 flex items-center justify-between px-6 z-50">
         <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
           <span className="w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-          Sentinel Engine v3.2
+          Market Info v3.2
           {loadingPhase === 'fast' && (
             <span className="text-amber-400 ml-2">⚡ Fast</span>
           )}
@@ -547,7 +542,7 @@ const App: React.FC = () => {
           )}
         </div>
         <div className="text-[9px] font-bold text-slate-500 uppercase">
-          Synced: {lastUpdate.toLocaleTimeString('pl-PL')}
+          Zsynchronizowano: {lastUpdate.toLocaleTimeString('pl-PL')}
         </div>
       </footer>
     </div>

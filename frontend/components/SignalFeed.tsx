@@ -9,14 +9,13 @@ interface SignalFeedProps {
   activeFilter: SignalFilter;
   onFilterChange: (f: SignalFilter) => void;
   cacheInfo: CacheInfo | null;
-  onForceRefresh: () => void;
 }
 
-const FILTERS: { key: SignalFilter; label: string; emoji: string }[] = [
-  { key: 'ALL',     label: 'Wszystko', emoji: '' },
-  { key: 'DZIS',    label: 'Dziś',     emoji: '🟡' },
-  { key: 'TYDZIEN', label: 'Tydzień',  emoji: '🟢' },
-  { key: 'MIESIAC', label: 'Miesiąc',  emoji: '🟣' },
+const FILTERS: { key: SignalFilter; label: string }[] = [
+  { key: 'ALL',     label: 'Wszystko' },
+  { key: 'DZIS',    label: 'Dziś' },
+  { key: 'TYDZIEN', label: 'Tydzień' },
+  { key: 'MIESIAC', label: 'Miesiąc' },
 ];
 
 function filterSignals(signals: MarketSignal[], filter: SignalFilter): MarketSignal[] {
@@ -35,7 +34,6 @@ export const SignalFeed: React.FC<SignalFeedProps> = ({
   activeFilter,
   onFilterChange,
   cacheInfo,
-  onForceRefresh,
 }) => {
   const isInitialLoad = loadingPhase === 'fast' && signals.length === 0;
   const isDeepLoading = loadingPhase === 'deep';
@@ -62,31 +60,23 @@ export const SignalFeed: React.FC<SignalFeedProps> = ({
           {loadingPhase === null && signals.length > 0 && (
             <span className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-green-400">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.6)]" />
-              Intelligence Stream
+              Strumień sygnałów
             </span>
           )}
         </div>
 
-        {/* Cache info + force refresh */}
+        {/* Cache info */}
         {cacheInfo && loadingPhase === null && (
-          <div className="flex items-center gap-2">
-            <span className="text-[9px] text-slate-500 font-mono">
-              Dane z {cacheInfo.timeLabel}
-            </span>
-            <button
-              onClick={onForceRefresh}
-              className="text-[9px] font-bold text-blue-400 hover:text-white uppercase tracking-wider px-2 py-1 bg-slate-800/50 border border-slate-700/50 rounded-lg transition-colors"
-            >
-              Odśwież ↺
-            </button>
-          </div>
+          <span className="text-[9px] text-slate-500 font-mono">
+            Dane z {cacheInfo.timeLabel}
+          </span>
         )}
       </div>
 
       {/* Filter bar */}
       {signals.length > 0 && (
         <div className="flex gap-2 flex-wrap">
-          {FILTERS.map(({ key, label, emoji }) => {
+          {FILTERS.map(({ key, label }) => {
             const count = countByFilter(signals, key);
             const isActive = activeFilter === key;
             return (
@@ -100,7 +90,6 @@ export const SignalFeed: React.FC<SignalFeedProps> = ({
                     : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:border-slate-500 hover:text-slate-200'
                 } disabled:opacity-30 disabled:cursor-not-allowed`}
               >
-                {emoji && <span>{emoji}</span>}
                 {label}
                 <span
                   className={`ml-1 px-1 rounded-full text-[8px] font-black ${
@@ -139,7 +128,7 @@ export const SignalFeed: React.FC<SignalFeedProps> = ({
         </div>
       ) : (
         !loadingPhase && (
-          <div className="text-center py-20 bg-slate-900/20 rounded-[40px] border-2 border-dashed border-slate-800/50 text-slate-600 text-sm">
+          <div className="text-center py-20 bg-slate-900/20 rounded-3xl border-2 border-dashed border-slate-800/50 text-slate-600 text-sm">
             Brak nowych sygnałów. Kliknij przycisk odświeżania.
           </div>
         )
