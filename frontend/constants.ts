@@ -23,9 +23,9 @@ export const TRACKED_ETFS: ETF[] = [
   },
   {
     ticker: 'CLN.PL',
-    name: 'CLN',
-    category: 'Akcje GPW',
-    description: 'Spółka z warszawskiej giełdy (popraw nazwę i kategorię wg potrzeb).',
+    name: 'Celon Pharma S.A.',
+    category: 'Farmacja / GPW',
+    description: 'Polska spółka farmaceutyczna (biotech) z GPW.',
   },
   {
     ticker: 'XTB.PL',

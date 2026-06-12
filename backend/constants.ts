@@ -16,7 +16,7 @@ export const TRACKED_ETFS: ETF[] = [
   { ticker: 'XNAS.DE', name: 'iShares Nasdaq 100 UCITS ETF', category: 'Technologia USA', description: '100 największych spółek tech z Nasdaq.' },
   { ticker: 'VWCE.DE', name: 'Vanguard FTSE All-World UCITS ETF', category: 'Akcje Globalne', description: 'Fundament dywersyfikacji — rynki rozwinięte i wschodzące.' },
   { ticker: 'SWIG80TR', name: 'Beta ETF sWIG80TR', category: 'Polska - Małe Spółki', description: 'Polskie małe spółki (sWIG80 Total Return).' },
-  { ticker: 'CLN.PL', name: 'CLN', category: 'Akcje GPW', description: 'Spółka z GPW (popraw nazwę/kategorię wg potrzeb).' },
+  { ticker: 'CLN.PL', name: 'Celon Pharma S.A.', category: 'Farmacja / GPW', description: 'Polska spółka farmaceutyczna (biotech) z GPW.' },
   { ticker: 'XTB.PL', name: 'XTB S.A.', category: 'Finanse / Broker', description: 'Akcje brokera XTB — wrażliwe na wolumen rynkowy.' },
   { ticker: 'DNP.PL', name: 'Dino Polska S.A.', category: 'Handel Detaliczny', description: 'Sieć handlowa Dino — wzrostowa spółka z GPW.' },
 ];
