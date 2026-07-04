@@ -6,6 +6,20 @@ export interface ETF {
   description: string;
 }
 
+// ─── Wykresy cenowe (karta "Wykresy (PLN)") ──────────────────────────────────
+export interface ChartPoint {
+  t: number;   // epoch (s)
+  eur: number; // cena instrumentu w EUR
+  fx: number;  // kurs EUR/PLN w tym momencie
+}
+export interface ChartResponse {
+  ticker: string;
+  interval: string;
+  currency: string;
+  asOf: string | null;
+  points: ChartPoint[];
+}
+
 export type SignalType = 'ANOMALY' | 'INFLUENCER' | 'NEWS' | 'THESIS' | 'MACRO';
 export type SignalPhase = 'fast' | 'deep';
 export type SignalPriority = 'DZIS' | 'TYDZIEN' | 'MIESIAC';

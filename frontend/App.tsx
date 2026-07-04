@@ -4,6 +4,7 @@ import { ETF, MarketSignal, GlobalMacroData, Influencer, SignalFilter, LoadingPh
 import { MarketCard } from './components/MarketCard';
 import { SignalFeed } from './components/SignalFeed';
 import { PortfolioSummary } from './components/PortfolioSummary';
+import { PriceChartsPanel } from './components/PriceChartsPanel';
 import {
   fetchMarketIntelligenceFast,
   fetchMarketIntelligenceDeep,
@@ -48,6 +49,8 @@ const App: React.FC = () => {
   const [etfs, setEtfs] = useState<ETF[]>([]);
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [selectedEtf, setSelectedEtf] = useState<ETF | 'GLOBAL'>('GLOBAL');
+  // Widok główny: analiza rynku (MARKET) vs karta wykresów kosztu w PLN (CHARTS).
+  const [view, setView] = useState<'MARKET' | 'CHARTS'>('MARKET');
   const [signals, setSignals] = useState<MarketSignal[]>([]);
   const [globalData, setGlobalData] = useState<GlobalMacroData | null>(null);
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>(null);
@@ -294,15 +297,28 @@ const App: React.FC = () => {
 
         {/* Global button */}
         <button
-          onClick={() => setSelectedEtf('GLOBAL')}
-          className={`w-full p-4 mb-8 rounded-2xl border transition-all flex items-center gap-4 ${
-            selectedEtf === 'GLOBAL'
+          onClick={() => { setView('MARKET'); setSelectedEtf('GLOBAL'); }}
+          className={`w-full p-4 mb-3 rounded-2xl border transition-all flex items-center gap-4 ${
+            view === 'MARKET' && selectedEtf === 'GLOBAL'
               ? 'bg-blue-600 border-blue-400 shadow-xl'
               : 'bg-slate-800/50 border-slate-700 hover:border-slate-500'
           }`}
         >
           <div className="p-2 bg-white/10 rounded-lg">🌍</div>
           <span className="font-bold text-sm">Przegląd Globalny</span>
+        </button>
+
+        {/* Charts button */}
+        <button
+          onClick={() => setView('CHARTS')}
+          className={`w-full p-4 mb-8 rounded-2xl border transition-all flex items-center gap-4 ${
+            view === 'CHARTS'
+              ? 'bg-blue-600 border-blue-400 shadow-xl'
+              : 'bg-slate-800/50 border-slate-700 hover:border-slate-500'
+          }`}
+        >
+          <div className="p-2 bg-white/10 rounded-lg">📈</div>
+          <span className="font-bold text-sm">Wykresy (PLN)</span>
         </button>
 
         {/* ETF list header */}
@@ -345,8 +361,8 @@ const App: React.FC = () => {
             <MarketCard
               key={etf.ticker}
               etf={etf}
-              isActive={typeof selectedEtf !== 'string' && selectedEtf.ticker === etf.ticker}
-              onClick={() => setSelectedEtf(etf)}
+              isActive={view === 'MARKET' && typeof selectedEtf !== 'string' && selectedEtf.ticker === etf.ticker}
+              onClick={() => { setView('MARKET'); setSelectedEtf(etf); }}
               onDelete={(e) => handleDeleteEtf(etf.ticker, e)}
             />
           ))}
@@ -355,6 +371,26 @@ const App: React.FC = () => {
 
       {/* MAIN CONTENT */}
       <main className="flex-1 p-6 lg:p-12 overflow-y-auto">
+        {view === 'CHARTS' ? (
+          <>
+            {/* Charts header */}
+            <header className="mb-10">
+              <div className="flex items-center gap-3 mb-3">
+                <h2 className="text-3xl font-black text-white">Wykresy — koszt zakupu (PLN)</h2>
+                <span className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-full text-[10px] font-bold border border-blue-500/30 uppercase">
+                  XTB
+                </span>
+              </div>
+              <p className="text-slate-400 text-sm max-w-2xl leading-relaxed italic">
+                Cena zakupu instrumentu w PLN (kurs EUR/PLN z tego samego momentu) z opcjonalnym 0,5% przewalutowania XTB. Dane: Yahoo Finance.
+              </p>
+            </header>
+            <section className="space-y-10">
+              <PriceChartsPanel />
+            </section>
+          </>
+        ) : (
+        <>
         {/* Header */}
         <header className="flex flex-col md:flex-row md:items-end justify-between mb-10 gap-6">
           <div>
@@ -449,6 +485,8 @@ const App: React.FC = () => {
             cacheInfo={cacheInfo}
           />
         </section>
+        </>
+        )}
       </main>
 
       {/* RIGHT SIDEBAR */}

@@ -41,6 +41,24 @@ export const TRACKED_ETFS: ETF[] = [
   },
 ];
 
+// ─── Wykresy cenowe (karta "Wykresy (PLN)") ──────────────────────────────────
+// Instrumenty dostępne na wykresie kosztu zakupu w PLN (oba w EUR na Xetrze).
+// Muszą pokrywać się z allowlistą w backend/marketData.ts (CHART_ALLOWLIST).
+export const CHART_INSTRUMENTS: { ticker: string; label: string }[] = [
+  { ticker: 'VWCE.DE', label: 'FTSE All-World (VWCE.DE)' },
+  { ticker: 'XNAS.DE', label: 'Nasdaq 100 (XNAS.DE)' },
+];
+
+export const CHART_INTERVALS: { id: string; label: string }[] = [
+  { id: '30m', label: '30 min' },
+  { id: '1h', label: '1 godz.' },
+  { id: '4h', label: '4 godz.' },
+  { id: '1d', label: 'Dobowy' },
+];
+
+/** Opłata XTB za przewalutowanie EUR→PLN (0,5%). */
+export const XTB_FX_FEE = 0.005;
+
 // ─── Influencers ─────────────────────────────────────────────────────────────
 export const DEFAULT_INFLUENCERS: Influencer[] = [
   { name: 'Elon Musk', handle: '@elonmusk', impact: 'Tech, Tesla, Sentiment' },

@@ -1,4 +1,4 @@
-import { ETF, Influencer, MarketIntelligenceResponse, MarketSignal, SignalPriority, PortfolioSummary } from '../types';
+import { ETF, Influencer, MarketIntelligenceResponse, MarketSignal, SignalPriority, PortfolioSummary, ChartResponse } from '../types';
 import { CACHE_TTL_MS, TRUSTED_SOURCES, SOURCE_NAME_ALIASES } from '../constants';
 
 const API_BASE_URL = 'http://192.168.88.8:3010';
@@ -100,6 +100,18 @@ function setCache(target: ETF | 'GLOBAL', data: MarketIntelligenceResponse): voi
 
 export function invalidateCache(target: ETF | 'GLOBAL'): void {
   sessionStorage.removeItem(cacheKey(target));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wykresy cenowe — koszt zakupu w PLN (karta "Wykresy (PLN)")
+// Bez cache — dane śróddzienne, świeżość ważniejsza.
+// ─────────────────────────────────────────────────────────────────────────────
+export async function getChart(ticker: string, interval: string): Promise<ChartResponse> {
+  const r = await fetch(
+    `${API_BASE_URL}/api/chart?ticker=${encodeURIComponent(ticker)}&interval=${encodeURIComponent(interval)}`
+  );
+  if (!r.ok) throw new Error(`Chart API error: ${r.statusText}`);
+  return r.json();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

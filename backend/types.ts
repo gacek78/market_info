@@ -49,6 +49,27 @@ export interface MarketIntelligenceResponse {
   globalData?: GlobalMacroData;
 }
 
+// ─── Wykresy cenowe (karta "Wykresy (PLN)") ──────────────────────────────────
+/** Jeden punkt serii: cena instrumentu w EUR + kurs EUR/PLN w tym samym momencie. */
+export interface ChartPoint {
+  /** epoch w sekundach (jak Yahoo) */
+  t: number;
+  /** cena zamknięcia instrumentu w walucie notowania (EUR) */
+  eur: number;
+  /** kurs EUR/PLN dopasowany do tego znacznika czasu */
+  fx: number;
+}
+
+export interface ChartResponse {
+  ticker: string;
+  interval: string;
+  /** waluta notowania instrumentu (oczekiwane 'EUR') */
+  currency: string;
+  /** znacznik ostatniego punktu (ISO) lub null */
+  asOf: string | null;
+  points: ChartPoint[];
+}
+
 // ─── Podsumowanie portfelowe ("Podsumowanie dla mnie") ───────────────────────
 export type PortfolioStance = 'HOLD' | 'ACCUMULATE' | 'WATCH' | 'REDUCE';
 

@@ -17,6 +17,7 @@ import {
 } from './stateManager';
 import { generatePortfolioSummary } from './geminiService';
 import { runAlertScan, scanAllTargets, sendTelegramMessage, isTelegramConfigured } from './notifier';
+import { fetchPlnCostSeries } from './marketData';
 
 dotenv.config();
 
@@ -201,6 +202,24 @@ app.post('/api/alerts/test', async (_req: Request, res: Response) => {
   }
   const ok = await sendTelegramMessage('✅ Sentinel IKE: test połączenia z Telegramem działa.');
   return res.json({ ok });
+});
+
+// ─── Wykresy cenowe (koszt zakupu w PLN) ────────────────────────────────────
+// Proxy do Yahoo (cena instrumentu + kurs EUR/PLN). Bez Gemini → nie wymaga API_KEY.
+app.get('/api/chart', async (req: Request, res: Response) => {
+  try {
+    const ticker = String(req.query.ticker || '');
+    const interval = String(req.query.interval || '1d');
+    if (!ticker) return res.status(400).json({ error: 'Missing ticker' });
+    const result = await fetchPlnCostSeries(ticker, interval);
+    return res.json(result);
+  } catch (error: any) {
+    if (String(error?.message).startsWith('Ticker not allowed')) {
+      return res.status(400).json({ error: error.message });
+    }
+    console.error('Chart Error:', error);
+    return res.status(500).json({ error: 'Failed to fetch chart' });
+  }
 });
 
 // ─── Health ───────────────────────────────────────────────────────────────

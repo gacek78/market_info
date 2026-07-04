@@ -7,6 +7,8 @@
  * AI "zgadywać" kursy walut, VIX czy ceny ETF-ów.
  */
 
+import { ChartPoint, ChartResponse } from './types';
+
 export interface Quote {
   symbol: string;
   price: number | null;
@@ -115,6 +117,105 @@ async function fetchVix(): Promise<number | null> {
   } catch {
     return null;
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wykresy cenowe — koszt zakupu w PLN (karta "Wykresy (PLN)")
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Instrumenty dozwolone dla /api/chart (oba notowane w EUR na Xetrze). */
+const CHART_ALLOWLIST = new Set(['XNAS.DE', 'VWCE.DE']);
+
+/** Interwał UI → parametry Yahoo. Yahoo nie ma natywnego 4h → bierzemy 60m i agregujemy. */
+const INTERVAL_MAP: Record<string, { yahoo: string; range: string; agg4h?: boolean }> = {
+  '30m': { yahoo: '30m', range: '1mo' },
+  '1h':  { yahoo: '60m', range: '3mo' },
+  '4h':  { yahoo: '60m', range: '6mo', agg4h: true },
+  '1d':  { yahoo: '1d',  range: '2y' },
+};
+
+interface Candle {
+  t: number; // epoch (s)
+  close: number;
+}
+
+/** Świece z Yahoo chart API (bez klucza). Best-effort — przy błędzie zwraca []. */
+async function fetchYahooCandles(symbol: string, interval: string, range: string): Promise<Candle[]> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`;
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SentinelIKE/1.0)' },
+    });
+    clearTimeout(timeout);
+    if (!res.ok) return [];
+    const json: any = await res.json();
+    const result = json?.chart?.result?.[0];
+    const ts: number[] = result?.timestamp ?? [];
+    const closes: (number | null)[] = result?.indicators?.quote?.[0]?.close ?? [];
+    const out: Candle[] = [];
+    for (let i = 0; i < ts.length; i++) {
+      const c = closes[i];
+      // Yahoo wstawia dziury (null) — pomijamy.
+      if (typeof c === 'number' && Number.isFinite(c)) out.push({ t: ts[i], close: c });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Agreguje świece 60m do kubełków 4h (klucz = floor(t/4h)), close = ostatnia świeca kubełka. */
+function aggregateTo4h(candles: Candle[]): Candle[] {
+  const FOUR_H = 4 * 3600;
+  const buckets = new Map<number, Candle>();
+  for (const c of candles) {
+    const key = Math.floor(c.t / FOUR_H);
+    const prev = buckets.get(key);
+    // Świece przychodzą rosnąco; nadpisanie zostawia ostatnią (close kubełka).
+    if (!prev || c.t >= prev.t) buckets.set(key, c);
+  }
+  return [...buckets.values()].sort((a, b) => a.t - b.t);
+}
+
+/**
+ * Buduje serię kosztu zakupu: cena instrumentu (EUR) + kurs EUR/PLN z tego samego
+ * momentu (forward-fill z najbliższej wcześniejszej świecy FX; FX handluje 24h,
+ * Xetra ~9:00–17:30). Przewalutowanie 0,5% XTB dolicza front z pól eur*fx.
+ * Rzuca przy tickerze spoza allowlisty (→ 400 w endpointcie).
+ */
+export async function fetchPlnCostSeries(ticker: string, interval: string): Promise<ChartResponse> {
+  const sym = ticker.toUpperCase();
+  if (!CHART_ALLOWLIST.has(sym)) throw new Error(`Ticker not allowed: ${ticker}`);
+  const map = INTERVAL_MAP[interval] ?? INTERVAL_MAP['1d'];
+
+  let [priceCandles, fxCandles] = await Promise.all([
+    fetchYahooCandles(sym, map.yahoo, map.range),
+    fetchYahooCandles('EURPLN=X', map.yahoo, map.range),
+  ]);
+
+  if (map.agg4h) {
+    priceCandles = aggregateTo4h(priceCandles);
+    fxCandles = aggregateTo4h(fxCandles);
+  }
+
+  // Forward-fill kursu: dla każdego t świecy ceny bierz najbliższy wcześniejszy kurs FX.
+  const fxSorted = fxCandles.slice().sort((a, b) => a.t - b.t);
+  const points: ChartPoint[] = [];
+  let j = 0;
+  let lastFx: number | null = null;
+  for (const p of priceCandles) {
+    while (j < fxSorted.length && fxSorted[j].t <= p.t) {
+      lastFx = fxSorted[j].close;
+      j++;
+    }
+    if (lastFx != null) points.push({ t: p.t, eur: p.close, fx: lastFx });
+  }
+
+  const asOf = points.length ? new Date(points[points.length - 1].t * 1000).toISOString() : null;
+  return { ticker: sym, interval, currency: 'EUR', asOf, points };
 }
 
 /**
