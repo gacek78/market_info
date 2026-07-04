@@ -210,8 +210,9 @@ app.get('/api/chart', async (req: Request, res: Response) => {
   try {
     const ticker = String(req.query.ticker || '');
     const interval = String(req.query.interval || '1d');
+    const range = String(req.query.range || 'month');
     if (!ticker) return res.status(400).json({ error: 'Missing ticker' });
-    const result = await fetchPlnCostSeries(ticker, interval);
+    const result = await fetchPlnCostSeries(ticker, interval, range);
     return res.json(result);
   } catch (error: any) {
     if (String(error?.message).startsWith('Ticker not allowed')) {

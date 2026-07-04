@@ -49,11 +49,21 @@ export const CHART_INSTRUMENTS: { ticker: string; label: string }[] = [
   { ticker: 'XNAS.DE', label: 'Nasdaq 100 (XNAS.DE)' },
 ];
 
+// Granulacja świecy.
 export const CHART_INTERVALS: { id: string; label: string }[] = [
   { id: '30m', label: '30 min' },
   { id: '1h', label: '1 godz.' },
   { id: '4h', label: '4 godz.' },
   { id: '1d', label: 'Dobowy' },
+];
+
+// Widoczny zakres czasu. `intervals` = granulacje sensowne/dozwolone dla danego
+// zakresu (limity Yahoo + czytelność), `def` = domyślna granulacja po wyborze zakresu.
+export const CHART_RANGES: { id: string; label: string; intervals: string[]; def: string }[] = [
+  { id: 'day',   label: 'Dzień',   intervals: ['30m', '1h'],       def: '30m' },
+  { id: 'week',  label: 'Tydzień', intervals: ['30m', '1h', '4h'], def: '1h' },
+  { id: 'month', label: 'Miesiąc', intervals: ['1h', '4h', '1d'],  def: '4h' },
+  { id: 'year',  label: 'Rok',     intervals: ['1d'],              def: '1d' },
 ];
 
 /** Opłata XTB za przewalutowanie EUR→PLN (0,5%). */

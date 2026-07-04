@@ -106,9 +106,9 @@ export function invalidateCache(target: ETF | 'GLOBAL'): void {
 // Wykresy cenowe — koszt zakupu w PLN (karta "Wykresy (PLN)")
 // Bez cache — dane śróddzienne, świeżość ważniejsza.
 // ─────────────────────────────────────────────────────────────────────────────
-export async function getChart(ticker: string, interval: string): Promise<ChartResponse> {
+export async function getChart(ticker: string, interval: string, range: string): Promise<ChartResponse> {
   const r = await fetch(
-    `${API_BASE_URL}/api/chart?ticker=${encodeURIComponent(ticker)}&interval=${encodeURIComponent(interval)}`
+    `${API_BASE_URL}/api/chart?ticker=${encodeURIComponent(ticker)}&interval=${encodeURIComponent(interval)}&range=${encodeURIComponent(range)}`
   );
   if (!r.ok) throw new Error(`Chart API error: ${r.statusText}`);
   return r.json();

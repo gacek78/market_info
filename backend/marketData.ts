@@ -126,12 +126,20 @@ async function fetchVix(): Promise<number | null> {
 /** Instrumenty dozwolone dla /api/chart (oba notowane w EUR na Xetrze). */
 const CHART_ALLOWLIST = new Set(['XNAS.DE', 'VWCE.DE']);
 
-/** Interwał UI → parametry Yahoo. Yahoo nie ma natywnego 4h → bierzemy 60m i agregujemy. */
-const INTERVAL_MAP: Record<string, { yahoo: string; range: string; agg4h?: boolean }> = {
-  '30m': { yahoo: '30m', range: '1mo' },
-  '1h':  { yahoo: '60m', range: '3mo' },
-  '4h':  { yahoo: '60m', range: '6mo', agg4h: true },
-  '1d':  { yahoo: '1d',  range: '2y' },
+/** Granulacja (interwał świecy) UI → Yahoo. Yahoo nie ma natywnego 4h → bierzemy 60m i agregujemy. */
+const GRANULARITY: Record<string, { yahoo: string; agg4h?: boolean }> = {
+  '30m': { yahoo: '30m' },
+  '1h':  { yahoo: '60m' },
+  '4h':  { yahoo: '60m', agg4h: true },
+  '1d':  { yahoo: '1d' },
+};
+
+/** Zakres widoczny (UI) → parametr `range` Yahoo. */
+const RANGE_MAP: Record<string, string> = {
+  day:   '1d',
+  week:  '5d',
+  month: '1mo',
+  year:  '1y',
 };
 
 interface Candle {
@@ -186,17 +194,18 @@ function aggregateTo4h(candles: Candle[]): Candle[] {
  * Xetra ~9:00–17:30). Przewalutowanie 0,5% XTB dolicza front z pól eur*fx.
  * Rzuca przy tickerze spoza allowlisty (→ 400 w endpointcie).
  */
-export async function fetchPlnCostSeries(ticker: string, interval: string): Promise<ChartResponse> {
+export async function fetchPlnCostSeries(ticker: string, interval: string, range: string): Promise<ChartResponse> {
   const sym = ticker.toUpperCase();
   if (!CHART_ALLOWLIST.has(sym)) throw new Error(`Ticker not allowed: ${ticker}`);
-  const map = INTERVAL_MAP[interval] ?? INTERVAL_MAP['1d'];
+  const g = GRANULARITY[interval] ?? GRANULARITY['1d'];
+  const yahooRange = RANGE_MAP[range] ?? '1mo';
 
   let [priceCandles, fxCandles] = await Promise.all([
-    fetchYahooCandles(sym, map.yahoo, map.range),
-    fetchYahooCandles('EURPLN=X', map.yahoo, map.range),
+    fetchYahooCandles(sym, g.yahoo, yahooRange),
+    fetchYahooCandles('EURPLN=X', g.yahoo, yahooRange),
   ]);
 
-  if (map.agg4h) {
+  if (g.agg4h) {
     priceCandles = aggregateTo4h(priceCandles);
     fxCandles = aggregateTo4h(fxCandles);
   }
