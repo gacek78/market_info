@@ -17,6 +17,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
+    ports:
+      - "3010:3000"
     environment:
       - TZ=Europe/Warsaw
       - API_KEY=${API_KEY}
@@ -26,4 +28,7 @@ services:
       - ALERT_CRON=${ALERT_CRON:-0 8 * * *}
       - VALIDATE_SIGNALS=${VALIDATE_SIGNALS:-}
       - PORTFOLIO_SUMMARY=${PORTFOLIO_SUMMARY:-}
-      - SUMMARY_REUSE_MIN=${SUMMARY_REUSE_MIN:-3
+      - SUMMARY_REUSE_MIN=${SUMMARY_REUSE_MIN:-300}
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
