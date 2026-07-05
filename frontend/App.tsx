@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ETF, MarketSignal, GlobalMacroData, Influencer, SignalFilter, LoadingPhase, CacheInfo, PortfolioSummary as PortfolioSummaryType } from './types';
+import { ETF, MarketSignal, GlobalMacroData, Influencer, SignalFilter, LoadingPhase, CacheInfo, EconomicEvent, PortfolioSummary as PortfolioSummaryType } from './types';
 import { MarketCard } from './components/MarketCard';
 import { SignalFeed } from './components/SignalFeed';
 import { PortfolioSummary } from './components/PortfolioSummary';
 import { PriceChartsPanel } from './components/PriceChartsPanel';
+import { MacroCalendar } from './components/MacroCalendar';
 import {
   fetchMarketIntelligenceFast,
   fetchMarketIntelligenceDeep,
@@ -52,6 +53,7 @@ const App: React.FC = () => {
   // Widok główny: analiza rynku (MARKET) vs karta wykresów kosztu w PLN (CHARTS).
   const [view, setView] = useState<'MARKET' | 'CHARTS'>('MARKET');
   const [signals, setSignals] = useState<MarketSignal[]>([]);
+  const [calendar, setCalendar] = useState<EconomicEvent[]>([]);
   const [globalData, setGlobalData] = useState<GlobalMacroData | null>(null);
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>(null);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -125,6 +127,7 @@ const App: React.FC = () => {
           if (cachedTs) {
             const fastData = await fetchMarketIntelligenceFast(target, false);
             setSignals(fastData.signals);
+            setCalendar(fastData.calendar ?? []);
             if (fastData.globalData) setGlobalData(fastData.globalData);
             setCacheInfo(buildCacheInfo(cachedTs));
             setLoadingPhase(null);
@@ -136,6 +139,7 @@ const App: React.FC = () => {
 
         const fast = await fetchMarketIntelligenceFast(target, true);
         setSignals(fast.signals);
+        setCalendar([]); // faza Fast nie ma internetu — kalendarz dopiero z Deep
         if (fast.globalData) setGlobalData(fast.globalData);
         setCacheInfo(null);
 
@@ -143,6 +147,7 @@ const App: React.FC = () => {
         setLoadingPhase('deep');
         const deep = await fetchMarketIntelligenceDeep(target, forceRefresh);
         setSignals(deep.signals);
+        setCalendar(deep.calendar ?? []);
         if (deep.globalData) setGlobalData(deep.globalData);
         setLastUpdate(new Date());
         setCacheInfo(buildCacheInfo(new Date()));
@@ -464,6 +469,9 @@ const App: React.FC = () => {
               </div>
             </div>
           )}
+
+          {/* Kalendarz makro — nadchodzące wydarzenia (z fazy Deep) */}
+          <MacroCalendar events={calendar} />
 
           {/* Podsumowanie portfelowe ("Podsumowanie dla mnie") — widok GLOBAL */}
           {selectedEtf === 'GLOBAL' && (

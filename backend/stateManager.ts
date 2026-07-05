@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import { ETF, Influencer, MarketSignal, PortfolioSummary } from './types';
+import { ETF, Influencer, LastScan, MarketSignal, PortfolioSummary } from './types';
 import { TRACKED_ETFS, DEFAULT_INFLUENCERS, DEFAULT_STRATEGY } from './constants';
 
 /**
@@ -23,6 +23,8 @@ interface PersistedState {
   strategy: string;
   /** Ostatnio wygenerowane podsumowanie portfelowe (do szybkiego podglądu). */
   lastSummary: PortfolioSummary | null;
+  /** Ostatni pełny skan (reużywany przez POST /api/summary, gdy świeży). */
+  lastScan: LastScan | null;
 }
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -39,6 +41,7 @@ function defaultState(): PersistedState {
     recentSignals: [],
     strategy: DEFAULT_STRATEGY,
     lastSummary: null,
+    lastScan: null,
   };
 }
 
@@ -153,5 +156,16 @@ export const getLastSummary = async (): Promise<PortfolioSummary | null> => {
 export const saveLastSummary = async (summary: PortfolioSummary): Promise<void> => {
   const s = await load();
   s.lastSummary = summary;
+  await persist();
+};
+
+// ─── Ostatni pełny skan (cache dla POST /api/summary) ───────────────────────────
+export const getLastScan = async (): Promise<LastScan | null> => {
+  return (await load()).lastScan;
+};
+
+export const saveLastScan = async (scan: LastScan): Promise<void> => {
+  const s = await load();
+  s.lastScan = scan;
   await persist();
 };

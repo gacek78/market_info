@@ -24,7 +24,10 @@ interface Row { t: number; pln: number; eur: number; fx: number }
 // ─── Wykres liniowy interaktywny (inline SVG, bez biblioteki) ─────────────────
 const W = 800;
 const H = 300;
-const PAD = { top: 16, right: 12, bottom: 28, left: 56 };
+// Czcionka osi w jednostkach viewBox — SVG skaluje się do szerokości kontenera,
+// więc realny rozmiar = AXIS_FONT × (szerokość_kontenera / 800).
+const AXIS_FONT = 15;
+const PAD = { top: 16, right: 12, bottom: 34, left: 74 };
 
 const LineChart: React.FC<{ rows: Row[]; interval: string; up: boolean }> = ({ rows, interval, up }) => {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -73,7 +76,7 @@ const LineChart: React.FC<{ rows: Row[]; interval: string; up: boolean }> = ({ r
         {gridY.map((g, i) => (
           <g key={i}>
             <line x1={PAD.left} x2={W - PAD.right} y1={g.yPix} y2={g.yPix} stroke="#1e293b" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-            <text x={PAD.left - 8} y={g.yPix + 3} textAnchor="end" fill="#64748b" fontSize={11} fontFamily="monospace">{g.label}</text>
+            <text x={PAD.left - 8} y={g.yPix + 5} textAnchor="end" fill="#94a3b8" fontSize={AXIS_FONT} fontFamily="monospace">{g.label}</text>
           </g>
         ))}
 
@@ -82,8 +85,8 @@ const LineChart: React.FC<{ rows: Row[]; interval: string; up: boolean }> = ({ r
         <polyline points={line} fill="none" stroke={stroke} strokeWidth={2} vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
 
         {/* oś X (pierwsza / ostatnia) */}
-        <text x={PAD.left} y={H - 8} textAnchor="start" fill="#64748b" fontSize={11} fontFamily="monospace">{fmtAxis(rows[0].t, interval)}</text>
-        <text x={W - PAD.right} y={H - 8} textAnchor="end" fill="#64748b" fontSize={11} fontFamily="monospace">{fmtAxis(rows[rows.length - 1].t, interval)}</text>
+        <text x={PAD.left} y={H - 8} textAnchor="start" fill="#94a3b8" fontSize={AXIS_FONT} fontFamily="monospace">{fmtAxis(rows[0].t, interval)}</text>
+        <text x={W - PAD.right} y={H - 8} textAnchor="end" fill="#94a3b8" fontSize={AXIS_FONT} fontFamily="monospace">{fmtAxis(rows[rows.length - 1].t, interval)}</text>
 
         {/* crosshair */}
         {hi != null && hRow && (
@@ -100,9 +103,9 @@ const LineChart: React.FC<{ rows: Row[]; interval: string; up: boolean }> = ({ r
           className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full bg-slate-950/95 border border-slate-700 rounded-lg px-3 py-2 shadow-xl whitespace-nowrap"
           style={{ left: `${(x(hi) / W) * 100}%`, top: `${(y(hRow.pln) / H) * 100}%`, marginTop: '-10px' }}
         >
-          <div className="text-[10px] text-slate-400 font-mono mb-0.5">{fmtFull(hRow.t)}</div>
-          <div className="text-sm font-mono font-bold text-white">{plnFmt.format(hRow.pln)} zł</div>
-          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+          <div className="text-xs text-slate-400 font-mono mb-0.5">{fmtFull(hRow.t)}</div>
+          <div className="text-base font-mono font-bold text-white">{plnFmt.format(hRow.pln)} zł</div>
+          <div className="text-xs text-slate-500 font-mono mt-0.5">
             {plnFmt.format(hRow.eur)} € · kurs {fxFmt.format(hRow.fx)}
           </div>
         </div>
@@ -264,7 +267,7 @@ export const PriceChartsPanel: React.FC = () => {
         )}
 
         {data?.asOf && (
-          <p className="text-[9px] text-slate-500 font-mono pt-4">
+          <p className="text-[11px] text-slate-500 font-mono pt-4">
             Ostatnia świeca: {new Date(data.asOf).toLocaleString('pl-PL')} · źródło: Yahoo Finance
           </p>
         )}

@@ -12,3 +12,6 @@ backend/data/
 
 # Pliki robocze (zrzuty ekranu itp.)
 pliki/
+
+# Lokalny stan sesji Claude Code (handoff itp.)
+.claude/

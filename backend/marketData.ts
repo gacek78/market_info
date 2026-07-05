@@ -15,22 +15,29 @@ export interface Quote {
   date: string | null;
 }
 
+// Przeglądarkowy User-Agent — Stooq (i czasem Yahoo) odrzuca żądania bez niego.
+const BROWSER_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
+
+/** fetch z timeoutem (AbortController). Rzuca przy timeout/błędzie sieci. */
+async function fetchWithTimeout(url: string, ms: number, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /** Pobiera pojedynczy kurs ze Stooq. Zwraca null przy błędzie (nie rzuca). */
 async function fetchStooqQuote(symbol: string): Promise<Quote> {
   const url = `https://stooq.com/q/l/?s=${encodeURIComponent(symbol)}&f=sd2t2ohlcv&h&e=csv`;
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
     // Stooq odrzuca żądania bez przeglądarkowego User-Agent (zwraca pusto).
-    const res = await fetch(url, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-        Accept: 'text/csv,text/plain,*/*',
-      },
+    const res = await fetchWithTimeout(url, 8000, {
+      headers: { 'User-Agent': BROWSER_UA, Accept: 'text/csv,text/plain,*/*' },
     });
-    clearTimeout(timeout);
     if (!res.ok) return { symbol, price: null, date: null };
 
     const csv = (await res.text()).trim();
@@ -76,12 +83,7 @@ export async function fetchMarketQuotes(): Promise<MarketQuotes> {
 async function fetchFx(): Promise<{ usdPln: string; eurPln: string; eurUsd: string; asOf: string | null }> {
   const get = async (from: string, to: string): Promise<{ rates: Record<string, number>; date: string } | null> => {
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-      const res = await fetch(`https://api.frankfurter.app/latest?from=${from}&to=${to}`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timeout);
+      const res = await fetchWithTimeout(`https://api.frankfurter.app/latest?from=${from}&to=${to}`, 8000);
       if (!res.ok) return null;
       return (await res.json()) as { rates: Record<string, number>; date: string };
     } catch {
@@ -103,13 +105,9 @@ async function fetchFx(): Promise<{ usdPln: string; eurPln: string; eurUsd: stri
 /** VIX z publicznego endpointu wykresów Yahoo Finance (bez klucza). */
 async function fetchVix(): Promise<number | null> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX', {
-      signal: controller.signal,
+    const res = await fetchWithTimeout('https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX', 8000, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SentinelIKE/1.0)' },
     });
-    clearTimeout(timeout);
     if (!res.ok) return null;
     const json: any = await res.json();
     const price = json?.chart?.result?.[0]?.meta?.regularMarketPrice;
@@ -151,13 +149,9 @@ interface Candle {
 async function fetchYahooCandles(symbol: string, interval: string, range: string): Promise<Candle[]> {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=${interval}&range=${range}`;
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const res = await fetch(url, {
-      signal: controller.signal,
+    const res = await fetchWithTimeout(url, 8000, {
       headers: { 'User-Agent': 'Mozilla/5.0 (compatible; SentinelIKE/1.0)' },
     });
-    clearTimeout(timeout);
     if (!res.ok) return [];
     const json: any = await res.json();
     const result = json?.chart?.result?.[0];
@@ -237,18 +231,10 @@ export async function resolveRedirect(
   url: string,
 ): Promise<{ finalUrl: string; domain: string } | null> {
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 6000);
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, 6000, {
       redirect: 'follow',
-      signal: controller.signal,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,*/*',
-      },
+      headers: { 'User-Agent': BROWSER_UA, Accept: 'text/html,application/xhtml+xml,*/*' },
     });
-    clearTimeout(timeout);
 
     const finalUrl = res.url || url;
     const host = new URL(finalUrl).hostname.replace(/^www\./, '');

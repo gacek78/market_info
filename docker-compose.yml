@@ -25,8 +25,5 @@ services:
       - ALERT_SEVERITY=${ALERT_SEVERITY:-high}
       - ALERT_CRON=${ALERT_CRON:-0 8 * * *}
       - VALIDATE_SIGNALS=${VALIDATE_SIGNALS:-}
-    ports:
-      - "3010:3000"
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
+      - PORTFOLIO_SUMMARY=${PORTFOLIO_SUMMARY:-}
+      - SUMMARY_REUSE_MIN=${SUMMARY_REUSE_MIN:-3

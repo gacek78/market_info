@@ -18,11 +18,12 @@ import {
   getInfluencersOnServer,
   getStrategy,
   saveLastSummary,
+  saveLastScan,
   wasAlertSent,
   markAlertsSent,
   recordSignals,
 } from './stateManager';
-import { ETF, GlobalMacroData, MarketSignal, PortfolioSummary } from './types';
+import { ETF, EconomicEvent, GlobalMacroData, MarketSignal, PortfolioSummary } from './types';
 
 const SEVERITY_RANK: Record<string, number> = { low: 0, medium: 1, high: 2 };
 
@@ -104,7 +105,13 @@ export function formatPortfolioSummary(s: PortfolioSummary): string {
   const actions = s.actions?.length
     ? '\n\n<i>Sugestie:</i>\n' + s.actions.map((a) => `– ${escapeHtml(a)}`).join('\n')
     : '';
-  return `${head}${headline}${narrative}${perAsset}${actions}`;
+  const upcoming = s.upcoming?.length
+    ? '\n\n📅 <b>Nadchodzące wydarzenia:</b>\n' +
+      s.upcoming
+        .map((u) => `• <b>${escapeHtml(u.date)}</b> ${escapeHtml(u.event)}\n<i>${escapeHtml(u.expectation)}</i>`)
+        .join('\n')
+    : '';
+  return `${head}${headline}${narrative}${perAsset}${upcoming}${actions}`;
 }
 
 /** Stabilny klucz dedup — ten sam news nie zostanie wysłany dwa razy. */
@@ -164,6 +171,8 @@ export interface FullScan {
   signals: MarketSignal[];
   /** Dane makro z celu GLOBAL (FX/VIX/CPI/stopy). */
   globalData?: GlobalMacroData;
+  /** Nadchodzące wydarzenia makro (zdeduplikowane ze wszystkich celów). */
+  calendar: EconomicEvent[];
   scanned: number;
 }
 
@@ -176,6 +185,7 @@ export async function scanAllTargets(): Promise<FullScan> {
   const targets: (ETF | 'GLOBAL')[] = ['GLOBAL', ...etfs];
 
   const signals: MarketSignal[] = [];
+  const calendarMap = new Map<string, EconomicEvent>();
   let globalData: GlobalMacroData | undefined;
   let scanned = 0;
 
@@ -185,12 +195,23 @@ export async function scanAllTargets(): Promise<FullScan> {
       const result = await fetchMarketIntelligenceDeep(target, influencers);
       signals.push(...result.signals);
       if (target === 'GLOBAL' && result.globalData) globalData = result.globalData;
+      // Dedup kalendarza po dacie + nazwie (te same wydarzenia wracają z wielu celów).
+      for (const ev of result.calendar ?? []) {
+        calendarMap.set(`${ev.date}|${ev.event.trim().toLowerCase()}`, ev);
+      }
     } catch (err) {
       console.error(`[Notifier] Skan ${typeof target === 'string' ? target : target.ticker} nie powiódł się:`, err);
     }
   }
 
-  return { signals, globalData, scanned };
+  const calendar = [...calendarMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+  // Utrwal wynik — POST /api/summary reużyje świeżego skanu zamiast skanować od zera.
+  if (signals.length) {
+    await saveLastScan({ signals, globalData, calendar, timestamp: new Date().toISOString() });
+  }
+
+  return { signals, globalData, calendar, scanned };
 }
 
 /** Czy generować podsumowanie portfelowe w cyklu (env PORTFOLIO_SUMMARY, domyślnie on). */
@@ -206,7 +227,7 @@ function isPortfolioSummaryEnabled(): boolean {
  */
 export async function runAlertScan(): Promise<ScanResult & { summary?: PortfolioSummary }> {
   const minRank = SEVERITY_RANK[(process.env.ALERT_SEVERITY || 'high').toLowerCase()] ?? 2;
-  const { signals: allSignals, globalData, scanned } = await scanAllTargets();
+  const { signals: allSignals, globalData, calendar, scanned } = await scanAllTargets();
 
   // Filtr alertów: severity >= próg, potwierdzone, jeszcze nie wysłane.
   const fresh: MarketSignal[] = [];
@@ -226,7 +247,7 @@ export async function runAlertScan(): Promise<ScanResult & { summary?: Portfolio
   if (isPortfolioSummaryEnabled()) {
     try {
       const strategy = await getStrategy();
-      summary = await generatePortfolioSummary(strategy, allSignals, globalData);
+      summary = await generatePortfolioSummary(strategy, allSignals, globalData, calendar);
       await saveLastSummary(summary);
     } catch (err) {
       console.error('[Notifier] Generowanie podsumowania nie powiodło się:', err);

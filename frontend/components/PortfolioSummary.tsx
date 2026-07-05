@@ -134,6 +134,28 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
               </div>
             )}
 
+            {/* Nadchodzące wydarzenia — czego się spodziewać po wynikach */}
+            {summary.upcoming && summary.upcoming.length > 0 && (
+              <div className="p-4 bg-slate-800/30 border border-slate-700/40 rounded-2xl">
+                <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-3">
+                  📅 Nadchodzące wydarzenia — czego się spodziewać
+                </span>
+                <div className="space-y-3">
+                  {summary.upcoming.map((u, i) => (
+                    <div key={`${u.date}-${i}`} className="flex gap-3 items-start">
+                      <span className="font-mono font-bold text-xs text-white whitespace-nowrap min-w-[5.5rem] pt-0.5">
+                        {u.date}
+                      </span>
+                      <div>
+                        <div className="text-xs font-bold text-slate-200 mb-0.5">{u.event}</div>
+                        <div className="text-xs text-slate-400 leading-relaxed">{u.expectation}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Sugestie działań */}
             {summary.actions.length > 0 && (
               <div className="p-4 bg-blue-900/15 border border-blue-500/20 rounded-2xl">

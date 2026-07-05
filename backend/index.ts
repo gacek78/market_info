@@ -8,12 +8,19 @@ import {
   validateAndFetchTickerDetails,
 } from './geminiService';
 import {
+  getEtfsOnServer,
+  saveEtfOnServer,
+  deleteEtfOnServer,
   getInfluencersOnServer,
+  saveInfluencerOnServer,
+  deleteInfluencerOnServer,
+  resetInfluencersOnServer,
   getRecentSignals,
   getStrategy,
   saveStrategy,
   getLastSummary,
   saveLastSummary,
+  getLastScan,
 } from './stateManager';
 import { generatePortfolioSummary } from './geminiService';
 import { runAlertScan, scanAllTargets, sendTelegramMessage, isTelegramConfigured } from './notifier';
@@ -106,19 +113,15 @@ app.post('/api/validate-ticker', async (req: Request, res: Response) => {
 
 // ─── ETF state endpoints ────────────────────────────────────────────────
 app.get('/api/etfs', async (_req: Request, res: Response) => {
-  const { getEtfsOnServer } = await import('./stateManager');
-  const etfs = await getEtfsOnServer();
-  return res.json(etfs);
+  return res.json(await getEtfsOnServer());
 });
 
 app.post('/api/etfs', async (req: Request, res: Response) => {
-  const { saveEtfOnServer } = await import('./stateManager');
   await saveEtfOnServer(req.body);
   return res.json({ ok: true });
 });
 
 app.delete('/api/etfs/:ticker', async (req: Request, res: Response) => {
-  const { deleteEtfOnServer } = await import('./stateManager');
   await deleteEtfOnServer(req.params.ticker);
   return res.json({ ok: true });
 });
@@ -129,21 +132,17 @@ app.get('/api/influencers', async (_req: Request, res: Response) => {
 });
 
 app.post('/api/influencers', async (req: Request, res: Response) => {
-  const { saveInfluencerOnServer } = await import('./stateManager');
   await saveInfluencerOnServer(req.body);
   return res.json({ ok: true });
 });
 
 app.delete('/api/influencers/:handle', async (req: Request, res: Response) => {
-  const { deleteInfluencerOnServer } = await import('./stateManager');
   await deleteInfluencerOnServer(decodeURIComponent(req.params.handle));
   return res.json({ ok: true });
 });
 
 app.post('/api/influencers/reset', async (_req: Request, res: Response) => {
-  const { resetInfluencersOnServer } = await import('./stateManager');
-  const defaults = await resetInfluencersOnServer();
-  return res.json(defaults);
+  return res.json(await resetInfluencersOnServer());
 });
 
 // ─── Strategia inwestora ────────────────────────────────────────────────────
@@ -163,12 +162,19 @@ app.get('/api/summary', async (_req: Request, res: Response) => {
   return res.json(await getLastSummary());
 });
 
-// Pełny skan wszystkich aktywów + synteza. Operacja ciężka (wiele wywołań Deep).
+// Synteza podsumowania. Reużywa ostatni pełny skan (np. z crona), jeśli jest świeższy
+// niż SUMMARY_REUSE_MIN minut (domyślnie 300 = 5 h) — pełny skan to kilkanaście wywołań
+// Gemini, więc nie ma sensu powtarzać go po każdym kliknięciu "Generuj".
 app.post('/api/summary', async (_req: Request, res: Response) => {
   try {
     if (!process.env.API_KEY) return res.status(401).json({ error: 'API key not configured' });
-    const [{ signals, globalData }, strategy] = await Promise.all([scanAllTargets(), getStrategy()]);
-    const summary = await generatePortfolioSummary(strategy, signals, globalData);
+    const reuseMin = Number(process.env.SUMMARY_REUSE_MIN || 300);
+    const last = await getLastScan();
+    const isFresh = last && Date.now() - new Date(last.timestamp).getTime() < reuseMin * 60_000;
+    if (isFresh) console.log(`[Summary] Reużywam skan z ${last!.timestamp} (limit ${reuseMin} min).`);
+    const scan = isFresh ? last! : await scanAllTargets();
+    const strategy = await getStrategy();
+    const summary = await generatePortfolioSummary(strategy, scan.signals, scan.globalData, scan.calendar ?? []);
     await saveLastSummary(summary);
     return res.json(summary);
   } catch (error: any) {
@@ -264,4 +270,3 @@ app.listen(Number(port), '0.0.0.0', () => {
 });
 
 export default app;
-

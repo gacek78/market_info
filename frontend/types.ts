@@ -45,8 +45,10 @@ export interface MarketSignal {
 }
 
 export interface EconomicEvent {
+  /** YYYY-MM-DD (backend zwraca tylko daty przyszłe). */
   date: string;
-  region: 'PL' | 'USA' | 'EU';
+  /** 'PL' | 'USA' | 'EU' (inne wartości tolerowane). */
+  region: string;
   event: string;
   impact: 'low' | 'medium' | 'high';
 }
@@ -91,6 +93,8 @@ export interface PortfolioSummary {
   narrative: string;
   perAsset: { ticker: string; stance: PortfolioStance; note: string }[];
   actions: string[];
+  /** Nadchodzące wydarzenia makro + czego się spodziewać po ogłoszeniu wyniku. */
+  upcoming?: { date: string; event: string; expectation: string }[];
   strategy: string;
   timestamp: Date;
 }

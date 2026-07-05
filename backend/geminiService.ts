@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { MarketIntelligenceResponse, MarketSignal, GlobalMacroData, PortfolioSummary } from "./types";
+import { MarketIntelligenceResponse, MarketSignal, GlobalMacroData, PortfolioSummary, EconomicEvent } from "./types";
 import { ETF, Influencer } from "./types";
 import { fetchMarketQuotes, fetchTickerPrice, resolveRedirect } from "./marketData";
 import { MODEL_FAST, MODEL_DEEP, MODEL_STRUCTURE, MODEL_VALIDATE, MODEL_SUMMARY } from "./constants";
@@ -42,6 +42,30 @@ function extractJson<T = any>(raw: string | undefined | null): T | null {
   }
   console.error('[GeminiService] Nie udało się sparsować JSON z odpowiedzi:', raw?.slice(0, 300));
   return null;
+}
+
+/**
+ * Sanityzacja kalendarza z odpowiedzi modelu: tylko poprawne, PRZYSZŁE daty
+ * (weryfikacja względem dzisiejszej daty — model bywa, że wpisuje przeszłość),
+ * posortowane rosnąco, maks. 10 pozycji.
+ */
+function sanitizeCalendar(raw: any, now: Date = new Date()): EconomicEvent[] {
+  if (!Array.isArray(raw)) return [];
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return raw
+    .filter((e: any) => e && typeof e.event === 'string' && typeof e.date === 'string')
+    .map((e: any): EconomicEvent => ({
+      date: e.date.slice(0, 10),
+      region: typeof e.region === 'string' ? e.region : 'EU',
+      event: e.event,
+      impact: e.impact === 'high' || e.impact === 'medium' ? e.impact : 'low',
+    }))
+    .filter((e) => {
+      const d = new Date(e.date);
+      return !Number.isNaN(d.getTime()) && d >= today;
+    })
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 10);
 }
 
 function isAuthError(error: any): boolean {
@@ -134,6 +158,7 @@ export const fetchMarketIntelligenceDeep = async (
   const ai = getAI();
   const isGlobal = target === 'GLOBAL';
   const influencersList = influencers.map((i) => `${i.name} (${i.handle})`).join(', ');
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   // ── Realne dane rynkowe (Stooq) — AI ma je interpretować, nie zgadywać ──
   const quotes = await fetchMarketQuotes();
@@ -163,6 +188,14 @@ export const fetchMarketIntelligenceDeep = async (
        - górna granica przedziału stóp Fed (Fed funds).
        Każda z tych czterech liczb MUSI się pojawić w tekście.
 
+       OBOWIĄZKOWO ustal też przez Google Search sekcję "KALENDARZ" — wypisz NADCHODZĄCE
+       (przyszłe względem ${todayIso}) wydarzenia makro z DOKŁADNYMI datami:
+       - najbliższe posiedzenie RPP (decyzja o stopach NBP),
+       - najbliższe posiedzenie FOMC (decyzja Fed),
+       - najbliższa publikacja CPI Polska (GUS) i CPI USA (BLS),
+       - inne istotne (ECB, PKB, dane z rynku pracy USA), jeśli znajdziesz daty.
+       Podawaj tylko wydarzenia z potwierdzoną datą — nie zgaduj.
+
        Monitoruj wypowiedzi tych osób: ${influencersList}.`
     : `GŁĘBOKA ANALIZA INSTRUMENTU: ${(target as ETF).ticker} (${(target as ETF).name}).
        ZAKAZ: Nie podawaj ogólnych danych o inflacji w Polsce czy kursie EUR/PLN, chyba że mają KLUCZOWY wpływ na ten instrument.
@@ -170,7 +203,11 @@ export const fetchMarketIntelligenceDeep = async (
        1. Newsy dotyczące bezpośrednio ${(target as ETF).ticker}.
        2. Sytuacja w sektorze: ${(target as ETF).category}.
        3. Co te osoby mówią o tym aktywie lub sektorze: ${influencersList}.
-       4. Wyniki finansowe największych spółek w tym ETF.`;
+       4. Wyniki finansowe największych spółek w tym ETF.
+
+       Na końcu dodaj sekcję "KALENDARZ": NADCHODZĄCE (przyszłe względem ${todayIso})
+       wydarzenia istotne dla tego instrumentu z DOKŁADNYMI datami (np. publikacja
+       wyników kwartalnych, dzień dywidendy). Tylko potwierdzone daty — nie zgaduj.`;
 
   // KROK 1 — RESEARCH: naturalny prompt + Google Search.
   // WAŻNE: wymuszanie "zwróć JSON" wyłącza wyszukiwanie (model odpowiada z pamięci),
@@ -249,6 +286,12 @@ ${
         słów typu "bez zmian"/"stabilnie", tylko liczbę. "ND" jest dopuszczalne TYLKO
         gdy danej liczby faktycznie nie ma w analizie.
 
+      ZASADY dla calendar (wyciągnij z sekcji "KALENDARZ" analizy):
+      - Tylko wydarzenia z konkretną datą PRZYSZŁĄ względem ${todayIso}; format "YYYY-MM-DD".
+      - "region": "PL" | "USA" | "EU".
+      - "impact": jak mocno wynik może ruszyć rynkiem: decyzje stóp/CPI = "high".
+      - Gdy w analizie nie ma sekcji KALENDARZ lub brak dat — zwróć pustą listę [].
+
       ZWRÓĆ WYŁĄCZNIE JSON:
       {
         "globalData": {
@@ -256,6 +299,9 @@ ${
           "cpiUs": "4.2%", "ratesUs": "3.75%",
           "sentiment": 50, "risk": 50
         },
+        "calendar": [
+          { "date": "YYYY-MM-DD", "region": "PL", "event": "Decyzja RPP o stopach", "impact": "high" }
+        ],
         "signals": [
           {
             "type": "NEWS",
@@ -319,7 +365,7 @@ ${
 
     return {
       signals: await verifyHighSeveritySignals(deepSignals),
-      calendar: [],
+      calendar: sanitizeCalendar(data.calendar),
       globalData: mergedGlobal,
     };
   } catch (error: any) {
@@ -388,6 +434,7 @@ export const generatePortfolioSummary = async (
   strategy: string,
   signals: MarketSignal[],
   globalData?: GlobalMacroData,
+  calendar: EconomicEvent[] = [],
 ): Promise<PortfolioSummary> => {
   const ai = getAI();
 
@@ -408,6 +455,10 @@ export const generatePortfolioSummary = async (
     )
     .join('\n');
 
+  const calendarBlock = calendar
+    .map((e) => `- ${e.date} (${e.region}, impact: ${e.impact}) ${e.event}`)
+    .join('\n');
+
   const prompt = `
     Działaj jako senior doradca portfela IKE. Napisz spersonalizowane PODSUMOWANIE dla inwestora.
 
@@ -418,6 +469,9 @@ export const generatePortfolioSummary = async (
 
     ŚWIEŻE SYGNAŁY (jedyne źródło — NIE dodawaj informacji spoza tej listy):
     ${signalsBlock || '(brak sygnałów — napisz, że nie wykryto istotnych zmian)'}
+
+    NADCHODZĄCE WYDARZENIA MAKRO (kalendarz):
+    ${calendarBlock || '(brak — pomiń pole "upcoming", zwróć pustą listę)'}
 
     Śledzone aktywa: ${tickers.join(', ') || '(brak)'}.
 
@@ -433,8 +487,19 @@ export const generatePortfolioSummary = async (
       "perAsset": [
         { "ticker": "XNAS.DE", "stance": "HOLD|ACCUMULATE|WATCH|REDUCE", "note": "krótkie uzasadnienie z sygnału" }
       ],
-      "actions": ["konkretna sugestia działania"]
+      "actions": ["konkretna sugestia działania"],
+      "upcoming": [
+        {
+          "date": "YYYY-MM-DD",
+          "event": "nazwa wydarzenia z kalendarza",
+          "expectation": "czego się spodziewać po ogłoszeniu wyniku i jak może wpłynąć na portfel — 1-2 zdania, scenariusz gdy wynik wyżej i gdy niżej od oczekiwań"
+        }
+      ]
     }
+
+    Dla pola "upcoming": opisz KAŻDE wydarzenie z kalendarza (zachowaj jego datę i nazwę).
+    "expectation" ma być praktyczne dla inwestora IKE (buy-and-hold): kiedy ogłoszenie może
+    dać okazję do dokupienia, a kiedy to tylko szum. Bez kalendarza — pusta lista [].
   `;
 
   try {
@@ -450,6 +515,9 @@ export const generatePortfolioSummary = async (
       narrative: data?.narrative ?? '',
       perAsset: Array.isArray(data?.perAsset) ? data.perAsset : [],
       actions: Array.isArray(data?.actions) ? data.actions : [],
+      upcoming: Array.isArray(data?.upcoming)
+        ? data.upcoming.filter((u: any) => u && typeof u.event === 'string' && typeof u.expectation === 'string')
+        : [],
       strategy,
       timestamp: new Date(),
     };
@@ -462,6 +530,7 @@ export const generatePortfolioSummary = async (
       narrative: '',
       perAsset: [],
       actions: [],
+      upcoming: [],
       strategy,
       timestamp: new Date(),
     };

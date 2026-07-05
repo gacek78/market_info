@@ -43,10 +43,33 @@ export interface GlobalMacroData {
   sources: { title: string; uri: string; domain?: string }[];
 }
 
+/** Nadchodzące wydarzenie makro (kalendarz ekonomiczny). */
+export interface EconomicEvent {
+  /** Data wydarzenia w formacie YYYY-MM-DD (przyszłość względem dnia skanu). */
+  date: string;
+  /** Region: 'PL' | 'USA' | 'EU' (inne wartości tolerowane). */
+  region: string;
+  event: string;
+  impact: 'low' | 'medium' | 'high';
+}
+
 export interface MarketIntelligenceResponse {
   signals: MarketSignal[];
-  calendar: any[];
+  calendar: EconomicEvent[];
   globalData?: GlobalMacroData;
+}
+
+/**
+ * Wynik ostatniego pełnego skanu (makro + wszystkie ETF-y) — trzymany w state.json,
+ * żeby POST /api/summary mógł reużyć świeży skan zamiast skanować wszystko od zera.
+ * Uwaga: po odczycie z dysku `timestamp` sygnałów to stringi ISO (jak recentSignals).
+ */
+export interface LastScan {
+  signals: MarketSignal[];
+  globalData?: GlobalMacroData;
+  calendar: EconomicEvent[];
+  /** ISO — kiedy wykonano skan. */
+  timestamp: string;
 }
 
 // ─── Wykresy cenowe (karta "Wykresy (PLN)") ──────────────────────────────────
@@ -83,6 +106,8 @@ export interface PortfolioSummary {
   perAsset: { ticker: string; stance: PortfolioStance; note: string }[];
   /** Konkretne sugestie działań. */
   actions: string[];
+  /** Nadchodzące wydarzenia makro + czego się spodziewać po ogłoszeniu wyniku. */
+  upcoming?: { date: string; event: string; expectation: string }[];
   /** Strategia użyta do wygenerowania (audyt). */
   strategy: string;
   timestamp: Date;

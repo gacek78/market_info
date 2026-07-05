@@ -2,7 +2,9 @@ import { ETF, Influencer } from './types';
 
 // ─── Modele Gemini (jedno miejsce do zmiany) ─────────────────────────────────
 export const MODEL_FAST = 'gemini-3-flash-preview';
-export const MODEL_DEEP = 'gemini-3.5-flash'; // faza Deep: research + Google Search
+// Faza Deep: research + Google Search. 3-flash jest ~3× tańszy od 'gemini-3.5-flash'
+// ($0.50/$3 vs $1.50/$9 za 1M tokenów) — wróć na 3.5, gdyby jakość researchu spadła.
+export const MODEL_DEEP = 'gemini-3-flash-preview';
 export const MODEL_STRUCTURE = 'gemini-3-flash-preview'; // szybkie formatowanie research → JSON (bez search)
 export const MODEL_VALIDATE = 'gemini-3-flash-preview';
 export const MODEL_SUMMARY = MODEL_STRUCTURE; // synteza portfelowa: JSON, bez search
