@@ -204,7 +204,11 @@ export async function scanAllTargets(): Promise<FullScan> {
     }
   }
 
-  const calendar = [...calendarMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+  // Cap do 10 — sanitizeCalendar capuje per-cel, ale po zmergowaniu z kilku celów
+  // (GLOBAL + każdy ETF) suma bez capa potrafiła urosnąć do kilkudziesięciu pozycji.
+  const calendar = [...calendarMap.values()]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 10);
 
   // Utrwal wynik — POST /api/summary reużyje świeżego skanu zamiast skanować od zera.
   if (signals.length) {
