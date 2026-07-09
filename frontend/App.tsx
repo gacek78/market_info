@@ -340,6 +340,11 @@ const App: React.FC = () => {
           <span className="font-bold text-sm">Ustawienia</span>
         </button>
 
+        {/* Sentiment gauge */}
+        <div className="mb-8">
+          <BullBearGauge sentiment={globalData?.sentiment ?? 50} risk={globalData?.risk ?? 50} />
+        </div>
+
         {/* ETF list header */}
         <div className="flex items-center justify-between mb-4 px-2">
           <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
@@ -405,9 +410,6 @@ const App: React.FC = () => {
               </p>
             </header>
             <section className="space-y-10">
-              <div className="max-w-md mx-auto">
-                <BullBearGauge sentiment={globalData?.sentiment ?? 50} risk={globalData?.risk ?? 50} />
-              </div>
               <PriceChartsPanel />
             </section>
           </>
