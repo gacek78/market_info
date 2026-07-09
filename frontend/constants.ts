@@ -72,7 +72,8 @@ export const XTB_FX_FEE = 0.005;
 // ─── Influencers ─────────────────────────────────────────────────────────────
 export const DEFAULT_INFLUENCERS: Influencer[] = [
   { name: 'Elon Musk', handle: '@elonmusk', impact: 'Tech, Tesla, Sentiment' },
-  { name: 'Jerome Powell', handle: 'FED', impact: 'Stopy procentowe, USD' },
+  { name: 'Jerome Powell', handle: 'FED (były Prezes)', impact: 'Członek Rady FED do 2028, wciąż wpływowy' },
+  { name: 'Kevin Warsh', handle: 'FED', impact: 'Prezes FED od 05/2026, stopy procentowe, USD' },
   { name: 'Przemysław Kwiecień', handle: '@PrzemekKwiecien', impact: 'Główny Ekonomista XTB, Macro' },
   { name: 'Michael Burry', handle: '@michaeljburry', impact: 'Nastroje niedźwiedzie, Macro' },
   { name: 'Trader21', handle: 'Independent Trader', impact: 'Polski rynek, Surowce, ETF' },

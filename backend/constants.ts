@@ -25,7 +25,8 @@ export const TRACKED_ETFS: ETF[] = [
 
 export const DEFAULT_INFLUENCERS: Influencer[] = [
   { name: 'Elon Musk', handle: '@elonmusk', impact: 'Tech, Tesla, Sentiment' },
-  { name: 'Jerome Powell', handle: 'FED', impact: 'Stopy procentowe, USD' },
+  { name: 'Jerome Powell', handle: 'FED (byly Prezes)', impact: 'Czlonek Rady FED do 2028, wciaz wplywowy' },
+  { name: 'Kevin Warsh', handle: 'FED', impact: 'Prezes FED od 05/2026, stopy procentowe, USD' },
   { name: 'Przemyslaw Kwiecien', handle: '@PrzemekKwiecien', impact: 'Glowny Ekonomista XTB, Macro' },
   { name: 'Michael Burry', handle: '@michaeljburry', impact: 'Nastroje niedzwiedzie, Macro' },
   { name: 'Trader21', handle: 'Independent Trader', impact: 'Polski rynek, Surowce, ETF' },

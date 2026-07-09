@@ -6,6 +6,7 @@ import { SignalFeed } from './components/SignalFeed';
 import { PortfolioSummary } from './components/PortfolioSummary';
 import { PriceChartsPanel } from './components/PriceChartsPanel';
 import { MacroCalendar } from './components/MacroCalendar';
+import { BullBearGauge } from './components/BullBearGauge';
 import {
   fetchMarketIntelligenceFast,
   fetchMarketIntelligenceDeep,
@@ -50,8 +51,8 @@ const App: React.FC = () => {
   const [etfs, setEtfs] = useState<ETF[]>([]);
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
   const [selectedEtf, setSelectedEtf] = useState<ETF | 'GLOBAL'>('GLOBAL');
-  // Widok główny: analiza rynku (MARKET) vs karta wykresów kosztu w PLN (CHARTS).
-  const [view, setView] = useState<'MARKET' | 'CHARTS'>('MARKET');
+  // Widok główny: analiza rynku (MARKET) vs karta wykresów kosztu w PLN (CHARTS) vs Ustawienia (SETTINGS).
+  const [view, setView] = useState<'MARKET' | 'CHARTS' | 'SETTINGS'>('MARKET');
   const [signals, setSignals] = useState<MarketSignal[]>([]);
   const [calendar, setCalendar] = useState<EconomicEvent[]>([]);
   const [globalData, setGlobalData] = useState<GlobalMacroData | null>(null);
@@ -316,7 +317,7 @@ const App: React.FC = () => {
         {/* Charts button */}
         <button
           onClick={() => setView('CHARTS')}
-          className={`w-full p-4 mb-8 rounded-2xl border transition-all flex items-center gap-4 ${
+          className={`w-full p-4 mb-3 rounded-2xl border transition-all flex items-center gap-4 ${
             view === 'CHARTS'
               ? 'bg-blue-600 border-blue-400 shadow-xl'
               : 'bg-slate-800/50 border-slate-700 hover:border-slate-500'
@@ -324,6 +325,19 @@ const App: React.FC = () => {
         >
           <div className="p-2 bg-white/10 rounded-lg">📈</div>
           <span className="font-bold text-sm">Wykresy (PLN)</span>
+        </button>
+
+        {/* Settings button */}
+        <button
+          onClick={() => setView('SETTINGS')}
+          className={`w-full p-4 mb-8 rounded-2xl border transition-all flex items-center gap-4 ${
+            view === 'SETTINGS'
+              ? 'bg-blue-600 border-blue-400 shadow-xl'
+              : 'bg-slate-800/50 border-slate-700 hover:border-slate-500'
+          }`}
+        >
+          <div className="p-2 bg-white/10 rounded-lg">⚙️</div>
+          <span className="font-bold text-sm">Ustawienia</span>
         </button>
 
         {/* ETF list header */}
@@ -391,7 +405,110 @@ const App: React.FC = () => {
               </p>
             </header>
             <section className="space-y-10">
+              <div className="max-w-md mx-auto">
+                <BullBearGauge sentiment={globalData?.sentiment ?? 50} risk={globalData?.risk ?? 50} />
+              </div>
               <PriceChartsPanel />
+            </section>
+          </>
+        ) : view === 'SETTINGS' ? (
+          <>
+            {/* Settings header */}
+            <header className="mb-10">
+              <div className="flex items-center gap-3 mb-3">
+                <h2 className="text-3xl font-black text-white">Ustawienia</h2>
+                <span className="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-full text-[10px] font-bold border border-blue-500/30 uppercase">
+                  Obserwowane osoby
+                </span>
+              </div>
+              <p className="text-slate-400 text-sm max-w-2xl leading-relaxed italic">
+                Lista osób, których wypowiedzi AI wyszukuje i uwzględnia w analizie Deep (Faza 2, Google Search).
+              </p>
+            </header>
+            <section className="space-y-10 max-w-2xl">
+              <div className="p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-xl">
+                <div className="flex justify-between items-center mb-6">
+                  <div className="flex items-center gap-2">
+                    <div className="w-1.5 h-5 bg-blue-500 rounded-full" />
+                    <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
+                      Radar Społeczny
+                    </h4>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowInfForm(!showInfForm)}
+                      className="text-blue-400 hover:text-white"
+                      title="Dodaj osobę"
+                    >
+                      +
+                    </button>
+                    <button
+                      onClick={handleResetInfluencers}
+                      className="text-slate-600 hover:text-red-400"
+                      title="Resetuj do domyślnych"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                {showInfForm && (
+                  <form onSubmit={addInfluencer} className="mb-6 p-4 bg-slate-800 border border-slate-700 rounded-2xl">
+                    <input
+                      placeholder="Imię"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-[10px] mb-2 focus:border-blue-500 outline-none"
+                      value={infName}
+                      onChange={(e) => setInfName(e.target.value)}
+                    />
+                    <input
+                      placeholder="@handle"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-[10px] mb-3 focus:border-blue-500 outline-none"
+                      value={infHandle}
+                      onChange={(e) => setInfHandle(e.target.value)}
+                    />
+                    <button className="w-full bg-blue-600 py-2 rounded-lg text-[10px] font-bold">
+                      Dodaj
+                    </button>
+                  </form>
+                )}
+
+                <div className="space-y-4">
+                  {influencers.map((inf) => (
+                    <div
+                      key={inf.handle}
+                      className="group flex items-center justify-between gap-3 p-2 hover:bg-slate-800/40 rounded-xl transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold text-blue-400">
+                          {inf.name[0]}
+                        </div>
+                        <div className="overflow-hidden">
+                          <div className="text-[10px] font-bold text-slate-300 truncate">{inf.name}</div>
+                          <div className="text-[8px] text-slate-500 truncate">{inf.handle} · {inf.impact}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteInfluencer(inf.handle)}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-slate-600 hover:text-red-500 transition-all"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* IKE Rule */}
+              <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-3xl opacity-60">
+                <h4 className="text-[10px] font-black text-slate-500 uppercase mb-2">IKE Rule #1</h4>
+                <p className="text-[10px] text-slate-400 italic">
+                  "Gdy wszyscy kupują w euforii — ostrożnie. Gdy krew się leje — szukaj okazji."
+                </p>
+              </div>
             </section>
           </>
         ) : (
@@ -496,131 +613,6 @@ const App: React.FC = () => {
         </>
         )}
       </main>
-
-      {/* RIGHT SIDEBAR */}
-      <aside className="w-full lg:w-80 border-l border-slate-800/50 p-6 bg-slate-900/10 flex flex-col gap-8 overflow-y-auto">
-
-        {/* Sentiment radar */}
-        <div className="p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-xl">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="w-1.5 h-5 bg-blue-500 rounded-full" />
-            <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
-              Radar Sentymentu
-            </h4>
-          </div>
-          <div className="space-y-6">
-            <div>
-              <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
-                <span>Byki (Greed)</span>
-                <span>{globalData?.sentiment ?? 50}%</span>
-              </div>
-              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-green-500 transition-all duration-1000"
-                  style={{ width: `${globalData?.sentiment ?? 50}%` }}
-                />
-              </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase mb-2">
-                <span>Niedźwiedzie (Fear)</span>
-                <span>{globalData?.risk ?? 50}%</span>
-              </div>
-              <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-red-500 transition-all duration-1000"
-                  style={{ width: `${globalData?.risk ?? 50}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Social radar */}
-        <div className="p-6 bg-slate-900 border border-slate-800 rounded-3xl shadow-xl">
-          <div className="flex justify-between items-center mb-6">
-            <div className="flex items-center gap-2">
-              <div className="w-1.5 h-5 bg-blue-500 rounded-full" />
-              <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest">
-                Radar Społeczny
-              </h4>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowInfForm(!showInfForm)}
-                className="text-blue-400 hover:text-white"
-                title="Dodaj osobę"
-              >
-                +
-              </button>
-              <button
-                onClick={handleResetInfluencers}
-                className="text-slate-600 hover:text-red-400"
-                title="Resetuj do domyślnych"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {showInfForm && (
-            <form onSubmit={addInfluencer} className="mb-6 p-4 bg-slate-800 border border-slate-700 rounded-2xl">
-              <input
-                placeholder="Imię"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-[10px] mb-2 focus:border-blue-500 outline-none"
-                value={infName}
-                onChange={(e) => setInfName(e.target.value)}
-              />
-              <input
-                placeholder="@handle"
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-[10px] mb-3 focus:border-blue-500 outline-none"
-                value={infHandle}
-                onChange={(e) => setInfHandle(e.target.value)}
-              />
-              <button className="w-full bg-blue-600 py-2 rounded-lg text-[10px] font-bold">
-                Dodaj
-              </button>
-            </form>
-          )}
-
-          <div className="space-y-4 max-h-[35vh] overflow-y-auto pr-2">
-            {influencers.map((inf) => (
-              <div
-                key={inf.handle}
-                className="group flex items-center justify-between gap-3 p-2 hover:bg-slate-800/40 rounded-xl transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px] font-bold text-blue-400">
-                    {inf.name[0]}
-                  </div>
-                  <div className="overflow-hidden">
-                    <div className="text-[10px] font-bold text-slate-300 truncate">{inf.name}</div>
-                    <div className="text-[8px] text-slate-500 truncate">{inf.handle}</div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleDeleteInfluencer(inf.handle)}
-                  className="opacity-0 group-hover:opacity-100 p-1 text-slate-600 hover:text-red-500 transition-all"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* IKE Rule */}
-        <div className="p-6 bg-slate-900/50 border border-slate-800 rounded-3xl opacity-60 mt-auto">
-          <h4 className="text-[10px] font-black text-slate-500 uppercase mb-2">IKE Rule #1</h4>
-          <p className="text-[10px] text-slate-400 italic">
-            "Gdy wszyscy kupują w euforii — ostrożnie. Gdy krew się leje — szukaj okazji."
-          </p>
-        </div>
-      </aside>
 
       {/* FOOTER STATUS BAR */}
       <footer className="fixed bottom-0 left-0 right-0 h-10 bg-black/80 backdrop-blur-md border-t border-slate-800/50 flex items-center justify-between px-6 z-50">
