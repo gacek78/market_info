@@ -3,6 +3,7 @@ import { MarketIntelligenceResponse, MarketSignal, GlobalMacroData, PortfolioSum
 import { ETF, Influencer } from "./types";
 import { fetchMarketQuotes, fetchTickerPrice, resolveRedirect } from "./marketData";
 import { MODEL_FAST, MODEL_DEEP, MODEL_STRUCTURE, MODEL_VALIDATE, MODEL_SUMMARY } from "./constants";
+import { getStrategy } from "./stateManager";
 
 const getAI = () => {
   if (!process.env.API_KEY) {
@@ -68,6 +69,22 @@ function sanitizeCalendar(raw: any, now: Date = new Date()): EconomicEvent[] {
     .slice(0, 10);
 }
 
+/** Kontekst realnego portfela — wstrzykiwany do promptów, żeby "IKE:"/longTermImpact
+ * nie zgadywał generycznych rad (np. o obligacjach USA), tylko odnosił się do tego,
+ * co inwestor faktycznie trzyma. */
+async function buildInvestorContextBlock(): Promise<string> {
+  const strategy = await getStrategy();
+  return `
+    KONTEKST INWESTORA (użyj do pola "longTermImpact" — nie zgaduj generycznych rad):
+    ${strategy || 'Brak zapisanej strategii.'}
+    WAŻNE: portfel IKE inwestora to WYŁĄCZNIE śledzone ETF-y/akcje — nie ma w nim obligacji.
+    Nie pisz o "rebalansowaniu części dłużnej IKE" ani o obligacjach USA. Jeśli news dotyczy
+    wyłącznie polityki Fed / długu USA i nie ma bezpośredniego przełożenia na kurs walutowy
+    (USD/PLN) lub śledzone tickery, napisz to wprost w "longTermImpact" (np. "brak
+    bezpośredniego wpływu na portfel, poza kursem USD/PLN") zamiast fabrykować radę.
+  `;
+}
+
 function isAuthError(error: any): boolean {
   const msg = error?.message ?? '';
   return (
@@ -91,8 +108,11 @@ export const fetchMarketIntelligenceFast = async (
        Sektor: ${(target as ETF).category}.
        Wygeneruj 2 szybkie sygnały na podstawie swojej wiedzy trenningowej.`;
 
+  const investorContext = await buildInvestorContextBlock();
+
   const prompt = `
     Działaj jako senior analityk portfela IKE.
+    ${investorContext}
     ${specificInstruction}
 
     WAŻNE: To jest SZYBKA, wstępna analiza (Faza 1). Nie masz dostępu do internetu.
@@ -199,6 +219,11 @@ export const fetchMarketIntelligenceDeep = async (
        Monitoruj wypowiedzi tych osób: ${influencersList}.`
     : `GŁĘBOKA ANALIZA INSTRUMENTU: ${(target as ETF).ticker} (${(target as ETF).name}).
        ZAKAZ: Nie podawaj ogólnych danych o inflacji w Polsce czy kursie EUR/PLN, chyba że mają KLUCZOWY wpływ na ten instrument.
+       ZAKAZ: Nie twórz osobnego wątku o ogólnej polityce Fed/RPP/CPI, zmianie prezesa banku
+       centralnego czy globalnym sentymencie rynkowym — to pokrywa osobna analiza GLOBAL, więc
+       osobny sygnał tutaj byłby duplikatem. Jeśli taki kontekst ma znaczenie dla tego
+       konkretnego instrumentu, wpleć go KRÓTKO jako uzasadnienie przy news'ie specyficznym dla
+       ${(target as ETF).ticker} (np. wynikach, zmianie rekomendacji) — nie jako osobny temat.
        SKUP SIĘ NA:
        1. Newsy dotyczące bezpośrednio ${(target as ETF).ticker}.
        2. Sytuacja w sektorze: ${(target as ETF).category}.
@@ -209,11 +234,14 @@ export const fetchMarketIntelligenceDeep = async (
        wydarzenia istotne dla tego instrumentu z DOKŁADNYMI datami (np. publikacja
        wyników kwartalnych, dzień dywidendy). Tylko potwierdzone daty — nie zgaduj.`;
 
+  const investorContext = await buildInvestorContextBlock();
+
   // KROK 1 — RESEARCH: naturalny prompt + Google Search.
   // WAŻNE: wymuszanie "zwróć JSON" wyłącza wyszukiwanie (model odpowiada z pamięci),
   // dlatego research prosimy tekstem — wtedy grounding realnie działa i daje źródła.
   const researchPrompt = `
     Działaj jako senior analityk portfela IKE.
+    ${investorContext}
     ${realDataBlock}
     ${specificInstruction}
 
@@ -262,6 +290,8 @@ export const fetchMarketIntelligenceDeep = async (
     const structurePrompt = `
       Na podstawie PONIŻSZEJ ANALIZY zamień ją na sygnały rynkowe. NIE dodawaj informacji
       spoza analizy. Zachowaj konkrety (daty, liczby).
+
+      ${investorContext}
 
       ANALIZA:
       ${researchText}
