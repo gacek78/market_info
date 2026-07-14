@@ -179,6 +179,18 @@ export const fetchMarketIntelligenceDeep = async (
   const isGlobal = target === 'GLOBAL';
   const influencersList = influencers.map((i) => `${i.name} (${i.handle})`).join(', ');
   const todayIso = new Date().toISOString().slice(0, 10);
+  const cutoffIso = new Date(Date.now() - 2 * 86_400_000).toISOString().slice(0, 10);
+
+  // Skan jest CODZIENNY — news sprzed kilku dni jest dla inwestora "stary", nawet gdy
+  // fundamentalnie ważny. Bez tego modelu chętnie naciąga starsze wydarzenia jako "aktualne",
+  // bo nie znalazł nic świeższego.
+  const recencyBlock = `
+    OKNO CZASOWE: ten skan działa CODZIENNIE. Jako sygnał raportuj WYŁĄCZNIE wydarzenia/newsy
+    z ostatnich 48 godzin (od ${cutoffIso} do ${todayIso}). Starsze materiały — nawet ważne
+    fundamentalnie — pomijaj całkowicie. NIE naciągaj starego newsa jako "aktualnego" tylko
+    dlatego, że nie znalazłeś nic świeższego. Brak świeżych wydarzeń jest OK — zwróć wtedy
+    mniej sygnałów, nawet zero.
+  `;
 
   // ── Realne dane rynkowe (Stooq) — AI ma je interpretować, nie zgadywać ──
   const quotes = await fetchMarketQuotes();
@@ -242,12 +254,14 @@ export const fetchMarketIntelligenceDeep = async (
   const researchPrompt = `
     Działaj jako senior analityk portfela IKE.
     ${investorContext}
+    ${recencyBlock}
     ${realDataBlock}
     ${specificInstruction}
 
-    Przeszukaj internet (Google) i zbierz NAJNOWSZE, KONKRETNE informacje — każdy wątek
-    z datą, liczbą i wydarzeniem. Wypisz 3-5 najważniejszych, aktualnych tematów dla tego
-    instrumentu. Dla każdego: co się stało, kiedy, dlaczego to ważne dla długoterminowego IKE.
+    Przeszukaj internet (Google) i zbierz NAJNOWSZE, KONKRETNE informacje z okna czasowego
+    opisanego wyżej — każdy wątek z datą, liczbą i wydarzeniem. Wypisz 3-5 najważniejszych,
+    świeżych tematów dla tego instrumentu (mniej, jeśli świeżych nie ma). Dla każdego: co się
+    stało, kiedy, dlaczego to ważne dla długoterminowego IKE.
     Pisz zwięźle, rzeczowo. Opieraj się WYŁĄCZNIE na znalezionych informacjach.
   `;
 
@@ -321,6 +335,12 @@ ${
       - "region": "PL" | "USA" | "EU".
       - "impact": jak mocno wynik może ruszyć rynkiem: decyzje stóp/CPI = "high".
       - Gdy w analizie nie ma sekcji KALENDARZ lub brak dat — zwróć pustą listę [].
+
+      ZASADA dla severity: skan jest CODZIENNY, więc "high" zarezerwuj WYŁĄCZNIE dla wydarzeń
+      z daty z ostatnich 48h (od ${cutoffIso} do ${todayIso}) o realnym wpływie na wycenę.
+      Starsza informacja — nawet ważna fundamentalnie (wyniki kwartalne sprzed tygodni,
+      podpisana wcześniej umowa) — NIE może dostać "high": obniż do "medium" albo "low".
+      "High" bez świeżej daty to fałszywy alarm.
 
       ZWRÓĆ WYŁĄCZNIE JSON:
       {
