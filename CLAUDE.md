@@ -46,6 +46,8 @@ The Deep research prompt asks (with today's date injected) for a "KALENDARZ" sec
 - **Constants are duplicated**: `TRACKED_ETFS` / `DEFAULT_INFLUENCERS` exist in both `backend/constants.ts` and `frontend/constants.ts` (frontend copies are fallbacks only). Keep them in sync if editing.
 - Forcing JSON output disables Gemini search — never add `responseMimeType: 'application/json'` to a call that needs `googleSearch`; use the two-step research→structure pattern instead.
 - The Gemini API key env var is **`API_KEY`** on the backend (and `GEMINI_API_KEY` is mapped to `process.env.API_KEY` in `frontend/vite.config.ts`).
+- **Every Gemini call goes through `callGemini` in `backend/geminiService.ts`** — it counts calls, caps them per day (`GEMINI_MAX_CALLS_PER_DAY`, default 300) and logs model, search usage, `finishReason` and token spend. Never call `ai.models.generateContent` directly again: on 10–11 Sep 2026 the app made ~4700 calls/day instead of ~110 and ran up a 564 zł bill with **no trace in the logs**. Full write-up and open questions: `INCYDENT-2026-09-koszty-gemini.md`.
+- **Billing is capped at 10 zł/month by an enforced Google spend limit** (budget `limit 10 zl - marketinfo gemini`, scope `marketinfo` + Gemini API) — Gemini API is **paused** once it is hit, so the app simply stops working rather than overspending. A plain budget *alert* is not protection: the pre-existing 40 zł alert budget was blown through 14× without stopping anything.
 - Both compose services set `restart: unless-stopped`. **Production** runs on a home NAS under `docker compose` (V2) at `/compose/market_info`; deploy = `git pull` + `docker compose up -d --force-recreate <svc>` (frontend uses vite with a mounted volume, so no image rebuild needed for code; rebuild only when the Dockerfile changes). The server's `.env` is **separate and git-ignored** — `ALERT_CRON`/secrets must be edited on the server, never committed.
 
 > **Operational context lives in Claude Code memory** (this machine, `~/.claude/`), not in the repo: SSH/deploy access to the NAS, the container inventory, and Docker disk-hygiene rules are in **global memory** (`nas_server_access.md`); market_info-specific deploy notes and gotchas are in **project memory** (`deployment.md`). Check those before asking the user how to reach or deploy to the server.
@@ -77,4 +79,5 @@ There is no test suite, linter, or typecheck script configured. `buildDigestMess
 - `POST /api/validate-ticker` — checks XTB availability via Gemini + search
 - `GET|POST|DELETE /api/etfs` · `/api/influencers` (+ `POST /api/influencers/reset`)
 - `GET /api/signals/recent` — recent scan history
+- `GET /api/gemini-usage` — today's Gemini call count vs the daily cap
 - `GET|PUT /

@@ -12,6 +12,58 @@ const getAI = () => {
   return new GoogleGenAI({ apiKey: process.env.API_KEY! });
 };
 
+// ─── Licznik wywołań Gemini + dzienny bezpiecznik ────────────────────────
+/**
+ * Każde wywołanie Gemini idzie przez `callGemini`. Powód: 10-11 września 2026
+ * aplikacja wykonała ~4700 żądań dziennie zamiast zwyczajowych ~110 i zrobiła
+ * rachunek na 564 zł (głównie płatne zapytania Google Search). W logach nie było
+ * po tym śladu, bo wywołań nikt nie liczył ani nie opisywał.
+ *
+ * Stąd dwie rzeczy w jednym miejscu:
+ *  - twardy limit wywołań na dobę (`GEMINI_MAX_CALLS_PER_DAY`, domyślnie 300),
+ *  - log każdego wywołania: etykieta, model, czy z wyszukiwarką, powód zakończenia
+ *    i zużycie tokenów. `finish=MAX_TOKENS` oznacza odpowiedź uciętą w połowie —
+ *    to właśnie przez nią sypały się błędy parsowania JSON.
+ */
+const MAX_CALLS_PER_DAY = Number(process.env.GEMINI_MAX_CALLS_PER_DAY ?? 300);
+
+let callDay = '';
+let callCount = 0;
+
+const dzisiaj = () => new Date().toISOString().slice(0, 10);
+
+export const getGeminiUsage = () => ({ day: callDay, calls: callCount, limit: MAX_CALLS_PER_DAY });
+
+async function callGemini(label: string, params: any) {
+  if (callDay !== dzisiaj()) {
+    callDay = dzisiaj();
+    callCount = 0;
+  }
+  if (callCount >= MAX_CALLS_PER_DAY) {
+    throw new Error(
+      `[Gemini] Dzienny limit wywołań (${MAX_CALLS_PER_DAY}) wyczerpany — wstrzymuję "${label}". ` +
+        'Jeśli to normalny ruch, podnieś GEMINI_MAX_CALLS_PER_DAY w .env na serwerze.',
+    );
+  }
+  callCount++;
+
+  const zSearch = Array.isArray(params?.config?.tools);
+  const response = await getAI().models.generateContent(params);
+
+  const finish = response.candidates?.[0]?.finishReason;
+  const usage: any = response.usageMetadata;
+  console.log(
+    `[Gemini] ${label} (${callCount}/${MAX_CALLS_PER_DAY}) model=${params.model}` +
+      `${zSearch ? ' +search' : ''} finish=${finish ?? '?'}` +
+      ` tokeny: we=${usage?.promptTokenCount ?? '?'} wy=${usage?.candidatesTokenCount ?? '?'}` +
+      `${usage?.thoughtsTokenCount ? ` myślenie=${usage.thoughtsTokenCount}` : ''}`,
+  );
+  if (finish && finish !== 'STOP') {
+    console.warn(`[Gemini] ${label}: odpowiedź zakończona jako ${finish} — może być ucięta.`);
+  }
+  return response;
+}
+
 /**
  * Robustnie wyciąga obiekt JSON z odpowiedzi modelu.
  *
@@ -98,7 +150,6 @@ function isAuthError(error: any): boolean {
 export const fetchMarketIntelligenceFast = async (
   target: ETF | 'GLOBAL'
 ): Promise<MarketIntelligenceResponse> => {
-  const ai = getAI();
   const isGlobal = target === 'GLOBAL';
 
   const specificInstruction = isGlobal
@@ -142,7 +193,7 @@ export const fetchMarketIntelligenceFast = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await callGemini('fast', {
       model: MODEL_FAST,
       contents: prompt,
       config: { responseMimeType: 'application/json' },
@@ -175,7 +226,6 @@ export const fetchMarketIntelligenceDeep = async (
   target: ETF | 'GLOBAL',
   influencers: Influencer[]
 ): Promise<MarketIntelligenceResponse> => {
-  const ai = getAI();
   const isGlobal = target === 'GLOBAL';
   const influencersList = influencers.map((i) => `${i.name} (${i.handle})`).join(', ');
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -266,7 +316,7 @@ export const fetchMarketIntelligenceDeep = async (
   `;
 
   try {
-    const research = await ai.models.generateContent({
+    const research = await callGemini('deep-research', {
       model: MODEL_DEEP,
       contents: researchPrompt,
       config: { tools: [{ googleSearch: {} }] },
@@ -366,7 +416,7 @@ ${
       }
     `;
 
-    const structured = await ai.models.generateContent({
+    const structured = await callGemini('deep-structure', {
       model: MODEL_STRUCTURE,
       contents: structurePrompt,
       config: { responseMimeType: 'application/json' },
@@ -443,7 +493,6 @@ export const verifyHighSeveritySignals = async (
     return signals;
   }
 
-  const ai = getAI();
   return Promise.all(
     signals.map(async (s) => {
       if (s.severity !== 'high') return s;
@@ -455,7 +504,7 @@ export const verifyHighSeveritySignals = async (
           Opis: "${s.summary}"
           ZWRÓĆ WYŁĄCZNIE JSON: { "verified": true|false, "note": "krótkie uzasadnienie" }
         `;
-        const response = await ai.models.generateContent({
+        const response = await callGemini('validate-signal', {
           model: MODEL_VALIDATE,
           contents: prompt,
           config: { tools: [{ googleSearch: {} }] },
@@ -486,7 +535,6 @@ export const generatePortfolioSummary = async (
   globalData?: GlobalMacroData,
   calendar: EconomicEvent[] = [],
 ): Promise<PortfolioSummary> => {
-  const ai = getAI();
 
   // Lista śledzonych tickerów (z sygnałów, bez GLOBAL) — model ma się trzymać tych aktywów.
   const tickers = [...new Set(signals.map((s) => s.ticker).filter((t) => t && t !== 'GLOBAL'))];
@@ -553,7 +601,7 @@ export const generatePortfolioSummary = async (
   `;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await callGemini('summary', {
       model: MODEL_SUMMARY,
       contents: prompt,
       config: { responseMimeType: 'application/json' },
@@ -589,7 +637,6 @@ export const generatePortfolioSummary = async (
 
 // ─── VALIDATE TICKER ──────────────────────────────────────────────────────────
 export const validateAndFetchTickerDetails = async (ticker: string): Promise<ETF | null> => {
-  const ai = getAI();
   try {
     const prompt = `
       Sprawdź dostępność tickera "${ticker}" w ofercie brokera XTB (IKE/IKZE - akcje i ETFy, nie CFD).
@@ -603,7 +650,7 @@ export const validateAndFetchTickerDetails = async (ticker: string): Promise<ETF
       }
     `;
 
-    const response = await ai.models.generateContent({
+    const response = await callGemini('validate-ticker', {
       model: MODEL_VALIDATE,
       contents: prompt,
       config: { tools: [{ googleSearch: {} }] },

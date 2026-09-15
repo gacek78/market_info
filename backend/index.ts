@@ -6,6 +6,7 @@ import {
   fetchMarketIntelligenceFast,
   fetchMarketIntelligenceDeep,
   validateAndFetchTickerDetails,
+  getGeminiUsage,
 } from './geminiService';
 import {
   getEtfsOnServer,
@@ -188,6 +189,13 @@ app.post('/api/summary', async (_req: Request, res: Response) => {
 // Lekka historia ostatnio wykrytych sygnałów (z cyklicznych skanów).
 app.get('/api/signals/recent', async (_req: Request, res: Response) => {
   res.json(await getRecentSignals());
+});
+
+// Ile wywołań Gemini poszło dzisiaj (licznik i dzienny limit z geminiService).
+// Po rachunku z 10-11 września 2026 to jedyny szybki sposób, żeby zobaczyć,
+// czy aplikacja nie rozkręciła się ponad normę — bez zaglądania w Google Cloud.
+app.get('/api/gemini-usage', (_req: Request, res: Response) => {
+  res.json(getGeminiUsage());
 });
 
 // Ręczne uruchomienie skanu + wysyłki na Telegram (przydatne do konfiguracji).
