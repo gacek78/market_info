@@ -147,9 +147,8 @@ ani wdrożony**.
 3. **Ustalić, kto wołał API poza harmonogramem.** Nowy log wywołań pokaże etykietę
    (`fast` / `deep-research` / `deep-structure` / `validate-signal` / `summary` /
    `validate-ticker`), co zawęzi poszukiwania do konkretnej ścieżki.
-4. **Sprawdzić, czy frontend nie woła Gemini bezpośrednio z przeglądarki** — klucz jest
-   mapowany w `frontend/vite.config.ts`, więc trafia do paczki wysyłanej do przeglądarki.
-   To niezbadany trop, a tłumaczyłby wywołania bez udziału backendu.
+4. ~~**Sprawdzić, czy frontend nie woła Gemini bezpośrednio z przeglądarki**~~ —
+   **sprawdzone 2026-09-20, hipoteza ODRZUCONA.** Szczegóły w aktualizacji niżej.
 5. Dopiero po tym podnieść limit w Google powyżej 10 zł, jeśli będzie trzeba.
 
 ## Gdzie to sprawdzić
@@ -164,3 +163,106 @@ ani wdrożony**.
 
 Uwaga: dane rozliczeniowe Google mają **dobę opóźnienia**. Bieżący dzień widać tylko
 w metrykach API.
+
+---
+
+# Aktualizacja 2026-09-20
+
+## Co kosztowało — rozbicie faktury
+
+Odczyt z Google Cloud Billing (konto `019F99-060D78-D6D462`, projekt `marketinfo`),
+grupowanie po pozycjach cennika, okres 1–19 września 2026. **Razem 565,99 zł**, w całości
+Gemini API. Ten sam kawałek sierpnia: 8,71 zł. Najdroższa doba: 374,34 zł.
+
+| Pozycja | Ilość | Koszt | Udział |
+|---|---|---|---|
+| Zapytania wyszukiwania — płatne | 7 412 | 385,30 zł | 68% |
+| Tokeny wyjściowe (gemini 3 flash) | 14 538 724 | 161,95 zł | 29% |
+| Tokeny wejściowe | 10 072 674 | 18,70 zł | 3% |
+| Tokeny z cache | 177 983 | 0,03 zł | — |
+| Zapytania wyszukiwania — darmowe | 5 085 | 0,00 zł | — |
+
+**Wniosek koryguje wcześniejsze założenie.** W notatkach z czerwca przyjęliśmy, że koszt
+napędza wyłącznie `googleSearch`. Wyszukiwanie faktycznie dominuje, ale **tokeny wyjściowe
+to prawie jedna trzecia rachunku** — limit liczący same wywołania z wyszukiwarką nie
+domknąłby tematu. Stawki jednostkowe stąd wyliczone (11,14 zł za milion tokenów wyjściowych,
+1,86 zł za milion wejściowych, 5,2 gr za zapytanie wyszukiwania) siedzą teraz
+w `backend/constants.ts` i służą do liczenia kosztu na bieżąco.
+
+Kontrola poprawności stawek: 9 400 wywołań z awarii × 1,93 gr = 181 zł, a rachunek za same
+tokeny wyniósł 180,65 zł.
+
+## Twardy limit Google zadziałał — ale po fakcie
+
+Budżet `limit 10 zl - marketinfo gemini` (tryb egzekwowany) **osiągnął limit 15 września
+o 22:46** — cztery dni po awarii z 10–11 września. Od 16 września każde wywołanie wraca jako:
+
+```
+403 Forbidden: "Spend cap breached for project: projects/160906824930
+for service: generativelanguage.googleapis.com"
+```
+
+Aplikacja była więc **martwa od 16 do 20 września** i nikt tego nie zauważył, bo skan kończył
+się cicho („brak treści do wysłania"). Odblokuje się 1 października, wraz z nowym miesiącem
+rozliczeniowym.
+
+Drugi budżet, `budzet dla xtb` (40 zł, całe konto), ma w kolumnie stanu **„Nie dotyczy"** —
+to sam alert. Pokazuje 565,99 zł / 40,00 zł i nie zatrzymał niczego.
+
+**Konsola Google stwierdza wprost: „Koszty są zazwyczaj rejestrowane w ciągu 24 godzin".**
+Przy szczycie 374 zł na dobę limit egzekwowany może przepuścić setki złotych, zanim zadziała.
+Nie jest to bezpiecznik, tylko ostatnia siatka — realna ochrona musi działać w aplikacji,
+w momencie wysyłki żądania.
+
+## Punkt 4 — hipoteza odrzucona
+
+„Frontend woła Gemini bezpośrednio z przeglądarki, z pominięciem backendu" — **nieprawda.**
+Trzy zgodne dowody, zebrane 2026-09-20:
+
+- żaden plik frontendu nie importował `@google/genai` ani nie czytał `process.env`
+  (wstrzykiwanie w `vite.config.ts` istniało, ale nie miało odbiorcy);
+- na serwerze **nie ma** `frontend/.env`, a w `/compose/market_info/.env` nie ma
+  `GEMINI_API_KEY` — `loadEnv` nie znajdował więc nic i `define` wstawiał `undefined`;
+- kontener frontendu ma **zero** zmiennych środowiskowych zawierających `GEMINI`/`API_KEY`.
+
+Klucz nigdy nie trafił do przeglądarki, **rotacja nie jest potrzebna**. Cała instalacja
+(wstrzykiwanie, wpis w importmap, zależność) została mimo to usunięta — była martwa, ale
+gotowa do użycia jednym importem.
+
+## Co zostało do sprawdzenia
+
+**Podwajanie wywołań przez React StrictMode.** Aplikacja chodzi na produkcji na serwerze
+deweloperskim vite, a `frontend/index.tsx` opakowuje ją w `React.StrictMode`, który celowo
+uruchamia każdy efekt dwa razy. Efekt startujący analizę (`App.tsx`, zależności
+`[selectedEtf, initialLoading, isAuthRequired]`) nie ma przed tym blokady, więc jedno wejście
+na świeżą zakładkę może kosztować 6 wywołań zamiast 3. **To wniosek z kodu, nie pomiar** —
+nie dało się go zweryfikować, bo od 16 września nie ma ani jednego udanego wywołania.
+
+Potwierdzenie po 1 października: w logu backendu szukać **par identycznych wpisów `[Gemini]`
+w odstępie sekund**. Log pokazuje teraz także koszt każdego wywołania, więc podwojenie będzie
+widać wprost w złotówkach.
+
+## Dlaczego w logach z 16–18 września nie było ani jednej linii `[Gemini]`
+
+Poprawka z 15 września logowała wywołanie **dopiero po udanej odpowiedzi**. Wszystkie 21 żądań
+odrzuconych przez Google nie zostawiło śladu, choć każde zajęło miejsce w limicie. To ta sama
+dziura („brak śladu w logach"), którą poprawka miała zasypać — załatana 20 września:
+nieudane wywołanie loguje się teraz razem z treścią błędu.
+
+## Zabezpieczenia po zmianach z 2026-09-20
+
+| Warstwa | Co robi | Kiedy działa |
+|---|---|---|
+| `GEMINI_MAX_COST_PLN_PER_MONTH` (5 zł) | liczy realny koszt z `usageMetadata`, blokuje po przekroczeniu | natychmiast |
+| `GEMINI_MAX_SEARCH_CALLS_PER_MONTH` (900) | trzyma wyszukiwanie w darmowej puli Google (5000/mies.) | natychmiast |
+| `GEMINI_MAX_SEARCH_CALLS_PER_DAY` (25) | dzienny sufit na płatną ścieżkę | natychmiast |
+| `GEMINI_MAX_CALLS_PER_DAY` (200) | wykrywacz lawiny | natychmiast |
+| Budżet 10 zł u Google | ostatnia siatka | z dobą opóźnienia |
+
+Licznik siedzi w `gemini-usage.json` w `DATA_DIR`, zapisywany atomowo, przeżywa restart
+kontenera; nieczytelny plik **blokuje** wywołania zamiast je odblokowywać. Błędna wartość
+któregokolwiek limitu **zatrzymuje aplikację** z komunikatem `[KONFIGURACJA]` zamiast po cichu
+wracać do wartości domyślnej.
+
+Zużycie zbite do budżetu: `ALERT_CRON=0 16 * * 2,5` (wtorek i piątek, ~9 skanów miesięcznie
+× 15 wywołań × 1,93 gr ≈ 2,6 zł, reszta budżetu na ręczne przeglądanie).
