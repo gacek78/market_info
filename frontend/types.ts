@@ -85,13 +85,19 @@ export interface CacheInfo {
 }
 
 // ─── Podsumowanie portfelowe ("Podsumowanie dla mnie") ───────────────────────
-export type PortfolioStance = 'HOLD' | 'ACCUMULATE' | 'WATCH' | 'REDUCE';
+/** Portfel IKE jest wyłącznie kupowany — brak 'REDUCE'/'HOLD'. Patrz backend/types.ts. */
+export type PortfolioStance = 'PRIORYTET' | 'STANDARD' | 'ODLOZ';
 
 export interface PortfolioSummary {
   overall: 'BULLISH' | 'NEUTRAL' | 'BEARISH';
   headline: string;
   narrative: string;
   perAsset: { ticker: string; stance: PortfolioStance; note: string }[];
+  /** Propozycja podziału miesięcznej wpłaty DCA. */
+  allocation?: { ticker: string; pln: number; why: string }[];
+  budgetPln?: number;
+  currencyWindow?: string;
+  whatWouldChangeIt?: string;
   actions: string[];
   /** Nadchodzące wydarzenia makro + czego się spodziewać po ogłoszeniu wyniku. */
   upcoming?: { date: string; event: string; expectation: string }[];

@@ -81,10 +81,9 @@ function formatSignal(s: MarketSignal): string {
 }
 
 const STANCE_EMOJI: Record<string, string> = {
-  ACCUMULATE: '🟢 Dokupuj',
-  HOLD: '⚪ Trzymaj',
-  WATCH: '👀 Obserwuj',
-  REDUCE: '🔻 Redukuj',
+  PRIORYTET: '🟢 Priorytet w tym miesiącu',
+  STANDARD: '⚪ Standardowa porcja',
+  ODLOZ: '⏸ Odłóż na później',
 };
 const OVERALL_EMOJI: Record<string, string> = { BULLISH: '📈', NEUTRAL: '➖', BEARISH: '📉' };
 
@@ -93,6 +92,20 @@ export function formatPortfolioSummary(s: PortfolioSummary): string {
   const head = `🧭 <b>Podsumowanie dla Ciebie</b> ${OVERALL_EMOJI[s.overall] ?? ''}`;
   const headline = s.headline ? `\n<b>${escapeHtml(s.headline)}</b>` : '';
   const narrative = s.narrative ? `\n${escapeHtml(s.narrative)}` : '';
+  // Podział wpłaty idzie NAD listę aktywów — to jedyna rzecz w całej wiadomości,
+  // którą inwestor faktycznie wykonuje w tym miesiącu.
+  const allocation = s.allocation?.length
+    ? `\n\n💰 <b>Twoja wpłata ${s.budgetPln ?? ''} zł w tym miesiącu:</b>\n` +
+      s.allocation
+        .map((a) => `• <b>${escapeHtml(a.ticker)}</b> — <b>${a.pln} zł</b>\n<i>${escapeHtml(a.why || '')}</i>`)
+        .join('\n')
+    : '';
+  const currency = s.currencyWindow
+    ? `\n\n💱 <b>Kurs:</b> ${escapeHtml(s.currencyWindow)}`
+    : '';
+  const changeIt = s.whatWouldChangeIt
+    ? `\n\n⚠️ <i>Co zmieniłoby ten plan:</i> ${escapeHtml(s.whatWouldChangeIt)}`
+    : '';
   const perAsset = s.perAsset?.length
     ? '\n\n' +
       s.perAsset
@@ -111,7 +124,7 @@ export function formatPortfolioSummary(s: PortfolioSummary): string {
         .map((u) => `• <b>${escapeHtml(u.date)}</b> ${escapeHtml(u.event)}\n<i>${escapeHtml(u.expectation)}</i>`)
         .join('\n')
     : '';
-  return `${head}${headline}${narrative}${perAsset}${upcoming}${actions}`;
+  return `${head}${headline}${narrative}${allocation}${currency}${perAsset}${upcoming}${actions}${changeIt}`;
 }
 
 /** Stabilny klucz dedup — ten sam news nie zostanie wysłany dwa razy. */

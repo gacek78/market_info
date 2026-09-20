@@ -16,10 +16,9 @@ const OVERALL: Record<string, { label: string; cls: string }> = {
 };
 
 const STANCE: Record<PortfolioStance, { label: string; cls: string }> = {
-  ACCUMULATE: { label: 'Dokupuj', cls: 'bg-green-600/20 text-green-400 border-green-500/30' },
-  HOLD: { label: 'Trzymaj', cls: 'bg-blue-600/20 text-blue-300 border-blue-500/30' },
-  WATCH: { label: 'Obserwuj', cls: 'bg-amber-600/20 text-amber-400 border-amber-500/30' },
-  REDUCE: { label: 'Redukuj', cls: 'bg-red-600/20 text-red-400 border-red-500/30' },
+  PRIORYTET: { label: 'Priorytet', cls: 'bg-green-600/20 text-green-400 border-green-500/30' },
+  STANDARD: { label: 'Standard', cls: 'bg-blue-600/20 text-blue-300 border-blue-500/30' },
+  ODLOZ: { label: 'Odłóż', cls: 'bg-slate-600/20 text-slate-300 border-slate-500/30' },
 };
 
 export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
@@ -111,11 +110,35 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
               <p className="text-sm text-slate-300 leading-relaxed">{summary.narrative}</p>
             )}
 
+            {/* Podział miesięcznej wpłaty — najważniejsza część panelu, bo jedyna
+                do wykonania. Dlatego nad listą aktywów i wyróżniona wizualnie. */}
+            {summary.allocation && summary.allocation.length > 0 && (
+              <div className="rounded-lg border border-emerald-500/30 bg-emerald-600/10 p-3 space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-400">
+                  Twoja wpłata{summary.budgetPln ? ` ${summary.budgetPln} zł` : ''} w tym miesiącu
+                </p>
+                {summary.allocation.map((a, i) => (
+                  <div key={i} className="flex gap-3 text-sm">
+                    <span className="font-bold text-white shrink-0 w-24">{a.ticker}</span>
+                    <span className="font-bold text-emerald-400 shrink-0 w-20 text-right">{a.pln} zł</span>
+                    <span className="text-slate-300 leading-snug">{a.why}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {summary.currencyWindow && (
+              <p className="text-sm text-slate-300">
+                <span className="font-semibold text-amber-400">Kurs: </span>
+                {summary.currencyWindow}
+              </p>
+            )}
+
             {/* Per aktyw */}
             {summary.perAsset.length > 0 && (
               <div className="space-y-2">
                 {summary.perAsset.map((a, i) => {
-                  const st = STANCE[a.stance] ?? STANCE.HOLD;
+                  const st = STANCE[a.stance] ?? STANCE.STANDARD;
                   return (
                     <div
                       key={`${a.ticker}-${i}`}
@@ -157,6 +180,12 @@ export const PortfolioSummary: React.FC<PortfolioSummaryProps> = ({
             )}
 
             {/* Sugestie działań */}
+            {summary.whatWouldChangeIt && (
+              <p className="text-xs text-slate-400 italic border-l-2 border-slate-600 pl-3">
+                Co zmieniłoby ten plan: {summary.whatWouldChangeIt}
+              </p>
+            )}
+
             {summary.actions.length > 0 && (
               <div className="p-4 bg-blue-900/15 border border-blue-500/20 rounded-2xl">
                 <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest block mb-2">

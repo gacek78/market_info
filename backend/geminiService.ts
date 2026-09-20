@@ -4,7 +4,7 @@ import { ETF, Influencer } from "./types";
 import { fetchMarketQuotes, fetchTickerPrice, resolveRedirect } from "./marketData";
 import {
   MODEL_FAST, MODEL_DEEP, MODEL_STRUCTURE, MODEL_VALIDATE, MODEL_SUMMARY,
-  CENA_ZL_ZA_MLN_TOKENOW_WY, CENA_ZL_ZA_MLN_TOKENOW_WE,
+  CENA_ZL_ZA_MLN_TOKENOW_WY, CENA_ZL_ZA_MLN_TOKENOW_WE, DCA_BUDGET_PLN,
 } from "./constants";
 import {
   getStrategy,
@@ -693,6 +693,43 @@ export const verifyHighSeveritySignals = async (
  * już zebranymi sygnałami). ZASADA anty-halucynacji: model NIE może dodawać
  * informacji spoza dostarczonych sygnałów.
  */
+/**
+ * Pilnuje, żeby propozycja podziału wpłaty była wykonalna, a nie tylko ładna.
+ *
+ * Model potrafi zwrócić kwoty, które nie sumują się do budżetu albo dotyczą aktywa
+ * spoza listy — a inwestor ma według tego złożyć realne zlecenie. Reszta z zaokrągleń
+ * ląduje w największej pozycji, żeby suma zgadzała się co do złotówki.
+ */
+function sanitizeAllocation(
+  surowe: any,
+  dozwoloneTickery: string[],
+): { ticker: string; pln: number; why: string }[] {
+  if (!Array.isArray(surowe) || !dozwoloneTickery.length) return [];
+
+  const pozycje = surowe
+    .filter((a: any) => a && dozwoloneTickery.includes(a.ticker) && Number(a.pln) > 0)
+    .map((a: any) => ({
+      ticker: String(a.ticker),
+      pln: Math.round(Number(a.pln)),
+      why: typeof a.why === 'string' ? a.why : '',
+    }));
+  if (!pozycje.length) return [];
+
+  const suma = pozycje.reduce((acc, p) => acc + p.pln, 0);
+  if (suma !== DCA_BUDGET_PLN) {
+    // Skalujemy proporcjonalnie, a różnicę z zaokrągleń dokładamy do największej pozycji.
+    const wspolczynnik = DCA_BUDGET_PLN / suma;
+    pozycje.forEach((p) => (p.pln = Math.round((p.pln * wspolczynnik) / 10) * 10));
+    const poSkalowaniu = pozycje.reduce((acc, p) => acc + p.pln, 0);
+    const najwieksza = pozycje.reduce((a, b) => (a.pln >= b.pln ? a : b));
+    najwieksza.pln += DCA_BUDGET_PLN - poSkalowaniu;
+    console.warn(
+      `[Summary] Podział wpłaty sumował się do ${suma} zł zamiast ${DCA_BUDGET_PLN} zł — skorygowano.`,
+    );
+  }
+  return pozycje.filter((p) => p.pln > 0);
+}
+
 export const generatePortfolioSummary = async (
   strategy: string,
   signals: MarketSignal[],
@@ -722,46 +759,74 @@ export const generatePortfolioSummary = async (
     .join('\n');
 
   const prompt = `
-    Działaj jako senior doradca portfela IKE. Napisz spersonalizowane PODSUMOWANIE dla inwestora.
+    Działaj jako doradca portfela IKE. Inwestor NIE pyta „kupować czy sprzedawać" — on
+    kupuje zawsze. Pyta: GDZIE skierować tegomiesięczną wpłatę ${DCA_BUDGET_PLN} zł i dlaczego akurat tam.
 
-    STRATEGIA INWESTORA (dopasuj ton i rekomendacje do niej):
+    STRATEGIA INWESTORA (nadrzędna — dopasuj do niej wszystko):
     ${strategy}
+
+    ZASADY, KTÓRYCH NIE WOLNO ZŁAMAĆ:
+    1. NIGDY nie sugeruj sprzedaży, redukcji ani wyjścia z pozycji. Tego nie ma w tej strategii.
+    2. Wpłata MUSI zostać w całości rozdysponowana — suma pola "allocation" ma wynosić
+       dokładnie ${DCA_BUDGET_PLN}. „Poczekaj z zakupem" nie jest dopuszczalną odpowiedzią;
+       jeśli nic nie jest wyjątkowo atrakcyjne, rozłóż wpłatę na najszerszy instrument.
+    3. Kwoty podawaj w pełnych złotych, zaokrąglone do 50 zł (łatwiej wykonać zlecenie).
+    4. Nie wymyślaj aktywów spoza listy śledzonych.
 
     ${macroBlock}
 
     ŚWIEŻE SYGNAŁY (jedyne źródło — NIE dodawaj informacji spoza tej listy):
-    ${signalsBlock || '(brak sygnałów — napisz, że nie wykryto istotnych zmian)'}
+    ${signalsBlock || '(brak sygnałów — napisz wprost, że nie wykryto istotnych zmian, i rozdziel wpłatę wg zwykłego, neutralnego podziału)'}
 
     NADCHODZĄCE WYDARZENIA MAKRO (kalendarz):
-    ${calendarBlock || '(brak — pomiń pole "upcoming", zwróć pustą listę)'}
+    ${calendarBlock || '(brak — zwróć pustą listę)'}
 
     Śledzone aktywa: ${tickers.join(', ') || '(brak)'}.
 
-    Zsyntetyzuj to w skrócie: ogólny wydźwięk dla portfela, co to znaczy KONKRETNIE dla planów
-    inwestora (z uwzględnieniem jego strategii), oraz rekomendacja per aktyw. Pisz po polsku,
-    rzeczowo, bez ogólników. Rekomendacje muszą wynikać z sygnałów, a nie z domysłów.
+    JAK MA WYGLĄDAĆ DOBRE PODSUMOWANIE:
+    - Zacznij od kierunku: dokąd zmierza sytuacja finansowo, jednym zdaniem.
+    - W "narrative" pogrupuj sygnały w 2-3 WĄTKI zamiast je wyliczać, i nazwij napięcie
+      między nimi, jeśli istnieje (np. dane sprzyjają jednemu, a polityka banku drugiemu).
+      Przy każdym wątku napisz, z których sygnałów wynika.
+    - Szukaj rzeczy, których pojedynczy sygnał nie pokaże: nakładania się tych samych spółek
+      w różnych ETF-ach, zgodnego kierunku kilku niezależnych odczytów, sprzeczności.
+    - "currencyWindow": dla polskiego inwestora kupującego zagraniczne ETF-y kurs jest
+      JEDYNĄ mierzalną dźwignią „dobrego momentu". Napisz, czy dziś jest tanio, i podaj
+      konkretny poziom USD/PLN lub EUR/PLN, powyżej którego przestaje być. Bez danych o kursie
+      — pomiń pole.
+    - "whatWouldChangeIt": jeden sprawdzalny warunek, po którym ten plan przestaje być aktualny.
+    - Bądź uczciwy: jeśli sygnały nie dają podstaw do żadnego przechylenia, powiedz to wprost
+      i zaproponuj neutralny podział. Nie udawaj przekonania, którego dane nie potwierdzają.
 
     ZWRÓĆ WYŁĄCZNIE JSON:
     {
       "overall": "BULLISH|NEUTRAL|BEARISH",
-      "headline": "Jedno zdanie podsumowania",
-      "narrative": "3-5 zdań: co się dzieje i co to znaczy dla planu inwestycyjnego",
-      "perAsset": [
-        { "ticker": "XNAS.DE", "stance": "HOLD|ACCUMULATE|WATCH|REDUCE", "note": "krótkie uzasadnienie z sygnału" }
+      "headline": "Jedno zdanie: dokąd zmierzamy finansowo",
+      "narrative": "4-6 zdań: 2-3 wątki z zaznaczeniem, z których sygnałów wynikają, plus napięcie między nimi",
+      "allocation": [
+        { "ticker": "VWCE.DE", "pln": 350, "why": "dlaczego akurat tu i akurat teraz — z sygnału lub z kursu" }
       ],
-      "actions": ["konkretna sugestia działania"],
+      "perAsset": [
+        { "ticker": "XNAS.DE", "stance": "PRIORYTET|STANDARD|ODLOZ", "note": "krótkie uzasadnienie z sygnału" }
+      ],
+      "currencyWindow": "czy kurs sprzyja zakupom i przy jakim poziomie przestaje",
+      "whatWouldChangeIt": "jeden sprawdzalny warunek unieważniający ten plan",
+      "actions": ["konkretna czynność do wykonania w tym miesiącu"],
       "upcoming": [
         {
           "date": "YYYY-MM-DD",
           "event": "nazwa wydarzenia z kalendarza",
-          "expectation": "czego się spodziewać po ogłoszeniu wyniku i jak może wpłynąć na portfel — 1-2 zdania, scenariusz gdy wynik wyżej i gdy niżej od oczekiwań"
+          "expectation": "czego się spodziewać i jak to wpływa na wpłatę DCA — 1-2 zdania, scenariusz gdy wynik wyżej i gdy niżej od oczekiwań"
         }
       ]
     }
 
+    "stance" znaczy: PRIORYTET = dostaje większą część wpłaty niż zwykle, STANDARD = zwykła
+    porcja, ODLOZ = w tym miesiącu pomijamy i kierujemy środki gdzie indziej (ale NIE sprzedajemy).
+
     Dla pola "upcoming": opisz KAŻDE wydarzenie z kalendarza (zachowaj jego datę i nazwę).
-    "expectation" ma być praktyczne dla inwestora IKE (buy-and-hold): kiedy ogłoszenie może
-    dać okazję do dokupienia, a kiedy to tylko szum. Bez kalendarza — pusta lista [].
+    "expectation" ma być praktyczne: kiedy ogłoszenie może dać lepszy moment na wpłatę,
+    a kiedy to tylko szum. Bez kalendarza — pusta lista [].
   `;
 
   try {
@@ -776,6 +841,10 @@ export const generatePortfolioSummary = async (
       headline: data?.headline ?? 'Brak istotnych zmian dla portfela.',
       narrative: data?.narrative ?? '',
       perAsset: Array.isArray(data?.perAsset) ? data.perAsset : [],
+      allocation: sanitizeAllocation(data?.allocation, tickers),
+      budgetPln: DCA_BUDGET_PLN,
+      currencyWindow: typeof data?.currencyWindow === 'string' ? data.currencyWindow : undefined,
+      whatWouldChangeIt: typeof data?.whatWouldChangeIt === 'string' ? data.whatWouldChangeIt : undefined,
       actions: Array.isArray(data?.actions) ? data.actions : [],
       upcoming: Array.isArray(data?.upcoming)
         ? data.upcoming.filter((u: any) => u && typeof u.event === 'string' && typeof u.expectation === 'string')
@@ -791,6 +860,8 @@ export const generatePortfolioSummary = async (
       headline: 'Nie udało się wygenerować podsumowania.',
       narrative: '',
       perAsset: [],
+      allocation: [],
+      budgetPln: DCA_BUDGET_PLN,
       actions: [],
       upcoming: [],
       strategy,

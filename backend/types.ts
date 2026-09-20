@@ -94,7 +94,12 @@ export interface ChartResponse {
 }
 
 // ─── Podsumowanie portfelowe ("Podsumowanie dla mnie") ───────────────────────
-export type PortfolioStance = 'HOLD' | 'ACCUMULATE' | 'WATCH' | 'REDUCE';
+/**
+ * Portfel IKE jest WYŁĄCZNIE kupowany — inwestor nie sprzedaje przez kilkanaście lat.
+ * Dlatego nie ma tu 'REDUCE' ani 'HOLD': pytanie nie brzmi „trzymać czy sprzedać",
+ * tylko „gdzie w tym miesiącu skierować wpłatę DCA".
+ */
+export type PortfolioStance = 'PRIORYTET' | 'STANDARD' | 'ODLOZ';
 
 export interface PortfolioSummary {
   overall: 'BULLISH' | 'NEUTRAL' | 'BEARISH';
@@ -102,8 +107,20 @@ export interface PortfolioSummary {
   headline: string;
   /** 3-5 zdań: co się dzieje i co to znaczy dla planu inwestycyjnego. */
   narrative: string;
-  /** Rekomendacja per śledzony aktyw. */
+  /** Rekomendacja per śledzony aktyw — gdzie skierować wpłatę, nigdy „sprzedaj". */
   perAsset: { ticker: string; stance: PortfolioStance; note: string }[];
+  /** Propozycja podziału miesięcznej wpłaty DCA. Suma = budżet z konfiguracji. */
+  allocation?: { ticker: string; pln: number; why: string }[];
+  /** Miesięczny budżet DCA użyty do podziału (zł). */
+  budgetPln?: number;
+  /**
+   * Kurs walutowy to jedyna dźwignia „dobrego momentu", która dla polskiego inwestora
+   * kupującego zagraniczne ETF-y jest mierzalna. Tu: czy dziś jest tanio i przy jakim
+   * poziomie przestaje być.
+   */
+  currencyWindow?: string;
+  /** Co musiałoby się wydarzyć, żeby zmienić ten plan — sprawdzalny warunek. */
+  whatWouldChangeIt?: string;
   /** Konkretne sugestie działań. */
   actions: string[];
   /** Nadchodzące wydarzenia makro + czego się spodziewać po ogłoszeniu wyniku. */
