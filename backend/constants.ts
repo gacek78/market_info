@@ -9,6 +9,19 @@ export const MODEL_STRUCTURE = 'gemini-3-flash-preview'; // szybkie formatowanie
 export const MODEL_VALIDATE = 'gemini-3-flash-preview';
 export const MODEL_SUMMARY = MODEL_STRUCTURE; // synteza portfelowa: JSON, bez search
 
+// ─── Ceny Gemini w złotówkach (zmierzone, nie z cennika) ─────────────────────
+/**
+ * Wyliczone z realnego rachunku za 1-19 września 2026 (Google Cloud Billing,
+ * projekt marketinfo, rozbicie na pozycje cennika):
+ *   tokeny wyjściowe  161,95 zł / 14 538 724 szt.  = 11,14 zł za milion
+ *   tokeny wejściowe   18,70 zł / 10 072 674 szt.  =  1,86 zł za milion
+ *   wyszukiwanie      385,30 zł /      7 412 szt.  =  0,052 zł za zapytanie
+ * Bierzemy ceny zmierzone, a nie z cennika, bo to one trafiają na fakturę.
+ * Gdy Google zmieni stawki albo zmienimy model — poprawić tutaj.
+ */
+export const CENA_ZL_ZA_MLN_TOKENOW_WY = 11.14;
+export const CENA_ZL_ZA_MLN_TOKENOW_WE = 1.86;
+
 // ─── Domyślna strategia inwestora (edytowalna w UI, trzymana w state.json) ────
 export const DEFAULT_STRATEGY =
   'Długoterminowe IKE (horyzont 10-15 lat), regularna akumulacja, podejście buy-and-hold. ' +

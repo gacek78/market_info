@@ -2,7 +2,10 @@ import { GoogleGenAI } from "@google/genai";
 import { MarketIntelligenceResponse, MarketSignal, GlobalMacroData, PortfolioSummary, EconomicEvent } from "./types";
 import { ETF, Influencer } from "./types";
 import { fetchMarketQuotes, fetchTickerPrice, resolveRedirect } from "./marketData";
-import { MODEL_FAST, MODEL_DEEP, MODEL_STRUCTURE, MODEL_VALIDATE, MODEL_SUMMARY } from "./constants";
+import {
+  MODEL_FAST, MODEL_DEEP, MODEL_STRUCTURE, MODEL_VALIDATE, MODEL_SUMMARY,
+  CENA_ZL_ZA_MLN_TOKENOW_WY, CENA_ZL_ZA_MLN_TOKENOW_WE,
+} from "./constants";
 import {
   getStrategy,
   getGeminiUsage as readGeminiUsage,
@@ -33,13 +36,14 @@ const getAI = () => {
  *    to właśnie przez nią sypały się błędy parsowania JSON.
  */
 /**
- * Dwa progi, bo dwie różne rzeczy trzeba pilnować:
- *  - LIMIT_WYWOLAN  — wykrywacz awarii. Tokeny w Gemini 3 Flash są groszowe,
- *    więc ten próg ma łapać lawinę (10 IX: 4700/dobę przy tle ~110), nie oszczędzać.
- *  - LIMIT_WYSZUKIWAN — pilnuje pieniędzy. Grounding to $14 za 1000 zapytań po
- *    wyczerpaniu darmowej puli (5000/miesiąc dla modeli 3.x) i to on zrobił rachunek.
- *    25/dobę = 750/miesiąc wywołań z wyszukiwarką, z zapasem pod darmowym limitem
- *    nawet gdy jedno wywołanie odpala kilka osobnych zapytań do Google.
+ * TRZY progi, bo trzy różne rzeczy trzeba pilnować:
+ *  - BUDZET_ZL_NA_MIESIAC — twarda kwota. Użytkownik nie zgadza się płacić więcej
+ *    niż 5 zł/miesiąc, więc to jest granica nadrzędna: po jej przekroczeniu
+ *    aplikacja przestaje wołać Gemini, niezależnie od pozostałych limitów.
+ *    Koszt liczymy ze zmierzonych stawek i z `usageMetadata` każdej odpowiedzi.
+ *  - LIMIT_WYSZUKIWAN (dzienny i miesięczny) — trzyma zapytania do Google WEWNĄTRZ
+ *    darmowej puli 5000/miesiąc. Dopóki tam jesteśmy, wyszukiwanie kosztuje zero.
+ *  - LIMIT_WYWOLAN — wykrywacz lawiny (10 IX: 4700/dobę przy tle ~110).
  */
 const limitZEnv = (nazwa: string, domyslny: number): number => {
   const surowy = process.env[nazwa];
@@ -64,6 +68,10 @@ const limitZEnv = (nazwa: string, domyslny: number): number => {
 
 const MAX_CALLS_PER_DAY = limitZEnv('GEMINI_MAX_CALLS_PER_DAY', 200);
 const MAX_SEARCH_CALLS_PER_DAY = limitZEnv('GEMINI_MAX_SEARCH_CALLS_PER_DAY', 25);
+const BUDZET_ZL_NA_MIESIAC = limitZEnv('GEMINI_MAX_COST_PLN_PER_MONTH', 5);
+// 900 wywołań z wyszukiwarką miesięcznie: nawet gdyby każde odpalało 5 osobnych
+// zapytań do Google, to 4500 — wciąż pod darmową pulą 5000, czyli koszt zero.
+const MAX_SEARCH_CALLS_PER_MONTH = limitZEnv('GEMINI_MAX_SEARCH_CALLS_PER_MONTH', 900);
 
 /**
  * Data w czasie polskim (RRRR-MM-DD). Świadomie NIE `toISOString()`: ten zwraca
@@ -73,10 +81,29 @@ const MAX_SEARCH_CALLS_PER_DAY = limitZEnv('GEMINI_MAX_SEARCH_CALLS_PER_DAY', 25
 const dzisiaj = () =>
   new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Warsaw' }).format(new Date());
 
+/** Miesiąc w czasie polskim (RRRR-MM) — okres rozliczeniowy budżetu. */
+const biezacyMiesiac = () => dzisiaj().slice(0, 7);
+
+/** Koszt jednego wywołania w złotych, ze zmierzonych stawek i licznika tokenów. */
+const kosztWywolania = (usage: any): number =>
+  ((usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0)) / 1e6 * CENA_ZL_ZA_MLN_TOKENOW_WY +
+  (usage?.promptTokenCount ?? 0) / 1e6 * CENA_ZL_ZA_MLN_TOKENOW_WE;
+
 async function aktualneZuzycie(): Promise<GeminiUsage | 'nieczytelny'> {
   const zapisane = await readGeminiUsage();
   if (zapisane === 'nieczytelny') return zapisane;
-  return zapisane.day === dzisiaj() ? zapisane : { day: dzisiaj(), calls: 0, searchCalls: 0 };
+  // Doba i miesiąc zerują się niezależnie — koszt narasta przez cały miesiąc,
+  // nawet gdy licznik dobowy startuje od nowa każdego ranka.
+  const nowaDoba = zapisane.day !== dzisiaj();
+  const nowyMiesiac = zapisane.month !== biezacyMiesiac();
+  return {
+    day: dzisiaj(),
+    calls: nowaDoba ? 0 : zapisane.calls,
+    searchCalls: nowaDoba ? 0 : zapisane.searchCalls,
+    month: biezacyMiesiac(),
+    costPln: nowyMiesiac ? 0 : zapisane.costPln,
+    searchCallsMonth: nowyMiesiac ? 0 : zapisane.searchCallsMonth,
+  };
 }
 
 /**
@@ -94,9 +121,18 @@ export const getGeminiUsage = async () => {
   const z = await aktualneZuzycie();
   if (z === 'nieczytelny') {
     return { day: dzisiaj(), calls: null, searchCalls: null, limit: MAX_CALLS_PER_DAY,
-             searchLimit: MAX_SEARCH_CALLS_PER_DAY, blad: 'licznik nieczytelny — wywołania wstrzymane' };
+             searchLimit: MAX_SEARCH_CALLS_PER_DAY, budzetZl: BUDZET_ZL_NA_MIESIAC,
+             blad: 'licznik nieczytelny — wywołania wstrzymane' };
   }
-  return { ...z, limit: MAX_CALLS_PER_DAY, searchLimit: MAX_SEARCH_CALLS_PER_DAY, blad: null };
+  return {
+    ...z,
+    costPln: Math.round(z.costPln * 10000) / 10000,
+    limit: MAX_CALLS_PER_DAY,
+    searchLimit: MAX_SEARCH_CALLS_PER_DAY,
+    searchLimitMonth: MAX_SEARCH_CALLS_PER_MONTH,
+    budzetZl: BUDZET_ZL_NA_MIESIAC,
+    blad: null,
+  };
 };
 
 async function callGemini(label: string, params: any) {
@@ -112,6 +148,19 @@ async function callGemini(label: string, params: any) {
           'Napraw lub skasuj plik gemini-usage.json w DATA_DIR albo użyj POST /api/gemini-usage/reset.',
       );
     }
+    if (zuzycie.costPln >= BUDZET_ZL_NA_MIESIAC) {
+      throw new Error(
+        `[Gemini] Miesięczny budżet (${BUDZET_ZL_NA_MIESIAC.toFixed(2)} zł) wyczerpany — ` +
+          `wstrzymuję "${label}". Wydano ${zuzycie.costPln.toFixed(2)} zł w ${zuzycie.month}. ` +
+          'Licznik wyzeruje się 1. dnia miesiąca; próg zmienia GEMINI_MAX_COST_PLN_PER_MONTH.',
+      );
+    }
+    if (zSearch && zuzycie.searchCallsMonth >= MAX_SEARCH_CALLS_PER_MONTH) {
+      throw new Error(
+        `[Gemini] Miesięczny limit wywołań z wyszukiwarką (${MAX_SEARCH_CALLS_PER_MONTH}) wyczerpany — ` +
+          `wstrzymuję "${label}". Ten limit trzyma wyszukiwanie w darmowej puli Google.`,
+      );
+    }
     if (zuzycie.calls >= MAX_CALLS_PER_DAY) {
       throw new Error(
         `[Gemini] Dzienny limit wywołań (${MAX_CALLS_PER_DAY}) wyczerpany — wstrzymuję "${label}". ` +
@@ -125,9 +174,10 @@ async function callGemini(label: string, params: any) {
       );
     }
     const kolejny: GeminiUsage = {
-      day: zuzycie.day,
+      ...zuzycie,
       calls: zuzycie.calls + 1,
       searchCalls: zuzycie.searchCalls + (zSearch ? 1 : 0),
+      searchCallsMonth: zuzycie.searchCallsMonth + (zSearch ? 1 : 0),
     };
     await saveGeminiUsage(kolejny);
     return kolejny;
@@ -151,12 +201,26 @@ async function callGemini(label: string, params: any) {
 
   const finish = response.candidates?.[0]?.finishReason;
   const usage: any = response.usageMetadata;
+
+  // Faktyczny koszt doliczamy PO odpowiedzi, bo dopiero wtedy znamy liczbę tokenów.
+  // Rezerwacja slotu wyżej pilnuje liczby wywołań; ta linia pilnuje złotówek.
+  const koszt = kosztWywolania(usage);
+  const poKoszcie = await podLiczkiem(async () => {
+    const z = await aktualneZuzycie();
+    if (z === 'nieczytelny') return null;
+    const zaktualizowany: GeminiUsage = { ...z, costPln: z.costPln + koszt };
+    await saveGeminiUsage(zaktualizowany);
+    return zaktualizowany;
+  });
+
   console.log(
     `[Gemini] ${label} (${numer.calls}/${MAX_CALLS_PER_DAY}` +
       `${zSearch ? `, szukanie ${numer.searchCalls}/${MAX_SEARCH_CALLS_PER_DAY}` : ''}) model=${params.model}` +
       `${zSearch ? ' +search' : ''} finish=${finish ?? '?'}` +
       ` tokeny: we=${usage?.promptTokenCount ?? '?'} wy=${usage?.candidatesTokenCount ?? '?'}` +
-      `${usage?.thoughtsTokenCount ? ` myślenie=${usage.thoughtsTokenCount}` : ''}`,
+      `${usage?.thoughtsTokenCount ? ` myślenie=${usage.thoughtsTokenCount}` : ''}` +
+      ` koszt=${koszt.toFixed(4)} zł` +
+      `${poKoszcie ? ` (${poKoszcie.costPln.toFixed(2)}/${BUDZET_ZL_NA_MIESIAC.toFixed(2)} zł w ${poKoszcie.month})` : ''}`,
   );
   if (finish && finish !== 'STOP') {
     console.warn(`[Gemini] ${label}: odpowiedź zakończona jako ${finish} — może być ucięta.`);

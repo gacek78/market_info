@@ -203,7 +203,7 @@ app.get('/api/gemini-usage', async (_req: Request, res: Response) => {
 // plik licznika się uszkodził — bez tego jedyną drogą była edycja pliku na serwerze.
 app.post('/api/gemini-usage/reset', async (_req: Request, res: Response) => {
   const dzis = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Warsaw' }).format(new Date());
-  const czysty = await resetGeminiUsage(dzis);
+  const czysty = await resetGeminiUsage(dzis, dzis.slice(0, 7));
   console.warn('[Gemini] Licznik wywołań wyzerowany ręcznie przez /api/gemini-usage/reset.');
   res.json(czysty);
 });

@@ -211,10 +211,16 @@ export const saveLastScan = async (scan: LastScan): Promise<void> => {
 export interface GeminiUsage {
   /** Data w czasie polskim, RRRR-MM-DD. */
   day: string;
-  /** Wszystkie wywołania Gemini. */
+  /** Wszystkie wywołania Gemini w tej dobie. */
   calls: number;
-  /** Wywołania z Google Search — to one kosztują ($14/1000 po darmowej puli). */
+  /** Wywołania z Google Search w tej dobie. */
   searchCalls: number;
+  /** Miesiąc w czasie polskim, RRRR-MM — do licznika kosztu i darmowej puli. */
+  month: string;
+  /** Narastający koszt tokenów w tym miesiącu, w złotych. */
+  costPln: number;
+  /** Wywołania z wyszukiwarką w tym miesiącu (pilnuje darmowej puli 5000 zapytań). */
+  searchCallsMonth: number;
 }
 
 /** `'nieczytelny'` = plik istnieje, ale nie da się go sparsować → traktuj jak wyczerpany limit. */
@@ -229,13 +235,19 @@ export const getGeminiUsage = async (): Promise<OdczytZuzycia> => {
     if (typeof p.day !== 'string' || typeof p.calls !== 'number' || !Number.isFinite(p.calls)) {
       throw new Error('brak wymaganych pól');
     }
+    const liczba = (v: unknown) => (Number.isFinite(v as number) ? (v as number) : 0);
     return {
       day: p.day,
       calls: p.calls,
-      searchCalls: Number.isFinite(p.searchCalls as number) ? (p.searchCalls as number) : 0,
+      searchCalls: liczba(p.searchCalls),
+      month: typeof p.month === 'string' ? p.month : '',
+      costPln: liczba(p.costPln),
+      searchCallsMonth: liczba(p.searchCallsMonth),
     };
   } catch (e: any) {
-    if (e?.code === 'ENOENT') return { day: '', calls: 0, searchCalls: 0 }; // pierwszy start
+    if (e?.code === 'ENOENT') {
+      return { day: '', calls: 0, searchCalls: 0, month: '', costPln: 0, searchCallsMonth: 0 };
+    }
     // Świadomie NIE zerujemy licznika. Nieczytelny plik nie może być tańszą
     // ścieżką do wyzerowania bezpiecznika niż zwykłe czekanie do jutra.
     console.error('[Gemini] Licznik wywołań nieczytelny — blokuję wywołania do czasu naprawy:', e?.message ?? e);
@@ -253,8 +265,8 @@ export const saveGeminiUsage = async (usage: GeminiUsage): Promise<void> => {
 };
 
 /** Ręczny reset licznika (endpoint administracyjny) — bez edycji pliku na serwerze. */
-export const resetGeminiUsage = async (day: string): Promise<GeminiUsage> => {
-  const czysty: GeminiUsage = { day, calls: 0, searchCalls: 0 };
+export const resetGeminiUsage = async (day: string, month: string): Promise<GeminiUsage> => {
+  const czysty: GeminiUsage = { day, calls: 0, searchCalls: 0, month, costPln: 0, searchCallsMonth: 0 };
   await saveGeminiUsage(czysty);
   return czysty;
 };
