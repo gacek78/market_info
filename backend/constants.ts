@@ -45,6 +45,7 @@ export const TRACKED_ETFS: ETF[] = [
   { ticker: 'CLN.PL', name: 'Celon Pharma S.A.', category: 'Farmacja / GPW', description: 'Polska spółka farmaceutyczna (biotech) z GPW.' },
   { ticker: 'XTB.PL', name: 'XTB S.A.', category: 'Finanse / Broker', description: 'Akcje brokera XTB — wrażliwe na wolumen rynkowy.' },
   { ticker: 'DNP.PL', name: 'Dino Polska S.A.', category: 'Handel Detaliczny', description: 'Sieć handlowa Dino — wzrostowa spółka z GPW.' },
+  { ticker: 'IGLN.UK', name: 'iShares Physical Gold ETC', category: 'Złoto / Surowce', description: 'Fizyczne złoto (ETC) — zabezpieczenie przed inflacją i osłabieniem walut.' },
 ];
 
 export const DEFAULT_INFLUENCERS: Influencer[] = [

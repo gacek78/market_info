@@ -39,6 +39,12 @@ export const TRACKED_ETFS: ETF[] = [
     category: 'Handel Detaliczny',
     description: 'Sieć handlowa Dino — jedna z najszybciej rosnących spółek na GPW.',
   },
+  {
+    ticker: 'IGLN.UK',
+    name: 'iShares Physical Gold ETC',
+    category: 'Złoto / Surowce',
+    description: 'Fizyczne złoto (ETC) — zabezpieczenie przed inflacją i osłabieniem walut.',
+  },
 ];
 
 // ─── Wykresy cenowe (karta "Wykresy (PLN)") ──────────────────────────────────
