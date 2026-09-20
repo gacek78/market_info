@@ -29,8 +29,21 @@ interface PersistedState {
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
+const USAGE_FILE = path.join(DATA_DIR, 'gemini-usage.json');
+
+/**
+ * Zapis przez plik tymczasowy i `rename`. `writeFile` najpierw ucina plik, a potem
+ * dopisuje — kontener ubity w tym oknie zostawiał obcięty JSON, po którym stan
+ * wracał do domyślnego (czyli licznik wywołań do zera). `rename` jest niepodzielny.
+ */
+async function zapiszAtomowo(plik: string, tresc: string): Promise<void> {
+  const tmp = `${plik}.tmp`;
+  await fs.writeFile(tmp, tresc, 'utf-8');
+  await fs.rename(tmp, plik);
+}
 
 let state: PersistedState | null = null;
+let loading: Promise<PersistedState> | null = null;
 let writeLock: Promise<void> = Promise.resolve();
 
 function defaultState(): PersistedState {
@@ -47,12 +60,24 @@ function defaultState(): PersistedState {
 
 async function load(): Promise<PersistedState> {
   if (state) return state;
+  // Buforujemy obietnicę, nie wynik: dwa równoległe żądania na zimnym starcie
+  // czytały plik niezależnie i drugie nadpisywało stan pierwszego — licznik
+  // wywołań potrafił się przez to cofnąć.
+  if (!loading) loading = wczytajZDysku();
+  return loading;
+}
+
+async function wczytajZDysku(): Promise<PersistedState> {
   try {
     const raw = await fs.readFile(STATE_FILE, 'utf-8');
     const parsed = JSON.parse(raw) as Partial<PersistedState>;
     state = { ...defaultState(), ...parsed };
-  } catch {
-    // Pierwszy start lub uszkodzony plik — startujemy od domyślnych.
+  } catch (e: any) {
+    // Pierwszy start to normalka. Uszkodzony plik to NIE normalka — kasuje ETF-y,
+    // strategię i klucze dedupu, więc musi zostawić ślad w logu.
+    if (e?.code !== 'ENOENT') {
+      console.error('[State] Nie udało się wczytać state.json — startuję od domyślnych:', e?.message ?? e);
+    }
     state = defaultState();
     await persist();
   }
@@ -63,9 +88,11 @@ async function persist(): Promise<void> {
   if (!state) return;
   const snapshot = JSON.stringify(state, null, 2);
   // Serializujemy zapisy, żeby uniknąć wyścigu przy równoległych żądaniach.
-  writeLock = writeLock.then(async () => {
+  // `.catch` przed `.then`: bez tego jeden nieudany zapis (brak miejsca, prawa)
+  // zostawiał łańcuch w stanie odrzuconym i nic już się nie zapisywało.
+  writeLock = writeLock.catch(() => undefined).then(async () => {
     await fs.mkdir(DATA_DIR, { recursive: true });
-    await fs.writeFile(STATE_FILE, snapshot, 'utf-8');
+    await zapiszAtomowo(STATE_FILE, snapshot);
   });
   return writeLock;
 }
@@ -168,4 +195,66 @@ export const saveLastScan = async (scan: LastScan): Promise<void> => {
   const s = await load();
   s.lastScan = scan;
   await persist();
+};
+
+// ─── Licznik wywołań Gemini (osobny, mały plik) ─────────────────────────────────
+/**
+ * Licznik MUSI być trwały — w pamięci procesu zerował się przy każdym restarcie
+ * kontenera, a `restart: unless-stopped` plus backend wywracający się w pętli to
+ * dokładnie ten scenariusz, przed którym bezpiecznik ma chronić.
+ *
+ * Trzyma się w WŁASNYM pliku, nie w `state.json`. Trzy powody:
+ *  - uszkodzenie dużego stanu nie kasuje licznika (i odwrotnie),
+ *  - plik jest malutki, więc okno na przerwany zapis jest minimalne,
+ *  - nie przepisujemy całego `lastScan` przy każdym wywołaniu Gemini.
+ */
+export interface GeminiUsage {
+  /** Data w czasie polskim, RRRR-MM-DD. */
+  day: string;
+  /** Wszystkie wywołania Gemini. */
+  calls: number;
+  /** Wywołania z Google Search — to one kosztują ($14/1000 po darmowej puli). */
+  searchCalls: number;
+}
+
+/** `'nieczytelny'` = plik istnieje, ale nie da się go sparsować → traktuj jak wyczerpany limit. */
+export type OdczytZuzycia = GeminiUsage | 'nieczytelny';
+
+let usageWriteLock: Promise<void> = Promise.resolve();
+
+export const getGeminiUsage = async (): Promise<OdczytZuzycia> => {
+  try {
+    const raw = await fs.readFile(USAGE_FILE, 'utf-8');
+    const p = JSON.parse(raw) as Partial<GeminiUsage>;
+    if (typeof p.day !== 'string' || typeof p.calls !== 'number' || !Number.isFinite(p.calls)) {
+      throw new Error('brak wymaganych pól');
+    }
+    return {
+      day: p.day,
+      calls: p.calls,
+      searchCalls: Number.isFinite(p.searchCalls as number) ? (p.searchCalls as number) : 0,
+    };
+  } catch (e: any) {
+    if (e?.code === 'ENOENT') return { day: '', calls: 0, searchCalls: 0 }; // pierwszy start
+    // Świadomie NIE zerujemy licznika. Nieczytelny plik nie może być tańszą
+    // ścieżką do wyzerowania bezpiecznika niż zwykłe czekanie do jutra.
+    console.error('[Gemini] Licznik wywołań nieczytelny — blokuję wywołania do czasu naprawy:', e?.message ?? e);
+    return 'nieczytelny';
+  }
+};
+
+export const saveGeminiUsage = async (usage: GeminiUsage): Promise<void> => {
+  const snapshot = JSON.stringify(usage);
+  usageWriteLock = usageWriteLock.catch(() => undefined).then(async () => {
+    await fs.mkdir(DATA_DIR, { recursive: true });
+    await zapiszAtomowo(USAGE_FILE, snapshot);
+  });
+  return usageWriteLock;
+};
+
+/** Ręczny reset licznika (endpoint administracyjny) — bez edycji pliku na serwerze. */
+export const resetGeminiUsage = async (day: string): Promise<GeminiUsage> => {
+  const czysty: GeminiUsage = { day, calls: 0, searchCalls: 0 };
+  await saveGeminiUsage(czysty);
+  return czysty;
 };

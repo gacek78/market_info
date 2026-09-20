@@ -22,6 +22,7 @@ import {
   getLastSummary,
   saveLastSummary,
   getLastScan,
+  resetGeminiUsage,
 } from './stateManager';
 import { generatePortfolioSummary } from './geminiService';
 import { runAlertScan, scanAllTargets, sendTelegramMessage, isTelegramConfigured } from './notifier';
@@ -194,8 +195,17 @@ app.get('/api/signals/recent', async (_req: Request, res: Response) => {
 // Ile wywołań Gemini poszło dzisiaj (licznik i dzienny limit z geminiService).
 // Po rachunku z 10-11 września 2026 to jedyny szybki sposób, żeby zobaczyć,
 // czy aplikacja nie rozkręciła się ponad normę — bez zaglądania w Google Cloud.
-app.get('/api/gemini-usage', (_req: Request, res: Response) => {
-  res.json(getGeminiUsage());
+app.get('/api/gemini-usage', async (_req: Request, res: Response) => {
+  res.json(await getGeminiUsage());
+});
+
+// Ręczne wyzerowanie licznika. Potrzebne, gdy bezpiecznik zadziałał fałszywie albo
+// plik licznika się uszkodził — bez tego jedyną drogą była edycja pliku na serwerze.
+app.post('/api/gemini-usage/reset', async (_req: Request, res: Response) => {
+  const dzis = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Warsaw' }).format(new Date());
+  const czysty = await resetGeminiUsage(dzis);
+  console.warn('[Gemini] Licznik wywołań wyzerowany ręcznie przez /api/gemini-usage/reset.');
+  res.json(czysty);
 });
 
 // Ręczne uruchomienie skanu + wysyłki na Telegram (przydatne do konfiguracji).

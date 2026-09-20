@@ -3,7 +3,12 @@ import { MarketIntelligenceResponse, MarketSignal, GlobalMacroData, PortfolioSum
 import { ETF, Influencer } from "./types";
 import { fetchMarketQuotes, fetchTickerPrice, resolveRedirect } from "./marketData";
 import { MODEL_FAST, MODEL_DEEP, MODEL_STRUCTURE, MODEL_VALIDATE, MODEL_SUMMARY } from "./constants";
-import { getStrategy } from "./stateManager";
+import {
+  getStrategy,
+  getGeminiUsage as readGeminiUsage,
+  saveGeminiUsage,
+  GeminiUsage,
+} from "./stateManager";
 
 const getAI = () => {
   if (!process.env.API_KEY) {
@@ -20,40 +25,135 @@ const getAI = () => {
  * po tym śladu, bo wywołań nikt nie liczył ani nie opisywał.
  *
  * Stąd dwie rzeczy w jednym miejscu:
- *  - twardy limit wywołań na dobę (`GEMINI_MAX_CALLS_PER_DAY`, domyślnie 300),
+ *  - dwa twarde limity na dobę: wszystkich wywołań (`GEMINI_MAX_CALLS_PER_DAY`)
+ *    i osobno tych z wyszukiwarką (`GEMINI_MAX_SEARCH_CALLS_PER_DAY`), bo to one
+ *    kosztują. Licznik siedzi w `gemini-usage.json`, więc restart go nie kasuje,
  *  - log każdego wywołania: etykieta, model, czy z wyszukiwarką, powód zakończenia
  *    i zużycie tokenów. `finish=MAX_TOKENS` oznacza odpowiedź uciętą w połowie —
  *    to właśnie przez nią sypały się błędy parsowania JSON.
  */
-const MAX_CALLS_PER_DAY = Number(process.env.GEMINI_MAX_CALLS_PER_DAY ?? 300);
+/**
+ * Dwa progi, bo dwie różne rzeczy trzeba pilnować:
+ *  - LIMIT_WYWOLAN  — wykrywacz awarii. Tokeny w Gemini 3 Flash są groszowe,
+ *    więc ten próg ma łapać lawinę (10 IX: 4700/dobę przy tle ~110), nie oszczędzać.
+ *  - LIMIT_WYSZUKIWAN — pilnuje pieniędzy. Grounding to $14 za 1000 zapytań po
+ *    wyczerpaniu darmowej puli (5000/miesiąc dla modeli 3.x) i to on zrobił rachunek.
+ *    25/dobę = 750/miesiąc wywołań z wyszukiwarką, z zapasem pod darmowym limitem
+ *    nawet gdy jedno wywołanie odpala kilka osobnych zapytań do Google.
+ */
+const limitZEnv = (nazwa: string, domyslny: number): number => {
+  const surowy = process.env[nazwa];
+  if (surowy === undefined || surowy.trim() === '') return domyslny;
 
-let callDay = '';
-let callCount = 0;
-
-const dzisiaj = () => new Date().toISOString().slice(0, 10);
-
-export const getGeminiUsage = () => ({ day: callDay, calls: callCount, limit: MAX_CALLS_PER_DAY });
-
-async function callGemini(label: string, params: any) {
-  if (callDay !== dzisiaj()) {
-    callDay = dzisiaj();
-    callCount = 0;
-  }
-  if (callCount >= MAX_CALLS_PER_DAY) {
+  const n = Number(surowy);
+  // `Number('trzydzieści')` to NaN, a `calls >= NaN` jest ZAWSZE fałszywe — literówka
+  // w .env po cichu wyłączyłaby bezpiecznik od pieniędzy. Świadomie nie robimy tu
+  // cichego powrotu do wartości domyślnej: błędna konfiguracja bezpiecznika ma
+  // zatrzymać aplikację, a nie pozwolić jej działać na przypadkowych założeniach.
+  // Kontener z `restart: unless-stopped` wpadnie w widoczną pętlę restartów —
+  // i o to chodzi. Awaria ma być głośna, bo cicha kosztuje.
+  if (!Number.isFinite(n) || n <= 0) {
     throw new Error(
-      `[Gemini] Dzienny limit wywołań (${MAX_CALLS_PER_DAY}) wyczerpany — wstrzymuję "${label}". ` +
-        'Jeśli to normalny ruch, podnieś GEMINI_MAX_CALLS_PER_DAY w .env na serwerze.',
+      `[KONFIGURACJA] ${nazwa}="${surowy}" nie jest dodatnią liczbą. ` +
+        'To limit chroniący przed rachunkiem za Gemini — nie uruchamiam aplikacji z zepsutym limitem. ' +
+        `Popraw wartość w .env na serwerze (oczekiwana liczba, np. ${domyslny}).`,
     );
   }
-  callCount++;
+  return n;
+};
 
+const MAX_CALLS_PER_DAY = limitZEnv('GEMINI_MAX_CALLS_PER_DAY', 200);
+const MAX_SEARCH_CALLS_PER_DAY = limitZEnv('GEMINI_MAX_SEARCH_CALLS_PER_DAY', 25);
+
+/**
+ * Data w czasie polskim (RRRR-MM-DD). Świadomie NIE `toISOString()`: ten zwraca
+ * datę UTC, więc licznik zerowałby się o 2:00 naszego czasu, podczas gdy cron
+ * chodzi w Europe/Warsaw. Doba licznika ma się pokrywać z dobą skanów.
+ */
+const dzisiaj = () =>
+  new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Warsaw' }).format(new Date());
+
+async function aktualneZuzycie(): Promise<GeminiUsage | 'nieczytelny'> {
+  const zapisane = await readGeminiUsage();
+  if (zapisane === 'nieczytelny') return zapisane;
+  return zapisane.day === dzisiaj() ? zapisane : { day: dzisiaj(), calls: 0, searchCalls: 0 };
+}
+
+/**
+ * Odczyt-zapis licznika musi być niepodzielny — faza Deep potrafi puścić kilka
+ * żądań równolegle i bez tego dwa wywołania odczytałyby ten sam stan.
+ */
+let usageLock: Promise<unknown> = Promise.resolve();
+function podLiczkiem<T>(fn: () => Promise<T>): Promise<T> {
+  const next = usageLock.then(fn, fn);
+  usageLock = next.catch(() => undefined);
+  return next;
+}
+
+export const getGeminiUsage = async () => {
+  const z = await aktualneZuzycie();
+  if (z === 'nieczytelny') {
+    return { day: dzisiaj(), calls: null, searchCalls: null, limit: MAX_CALLS_PER_DAY,
+             searchLimit: MAX_SEARCH_CALLS_PER_DAY, blad: 'licznik nieczytelny — wywołania wstrzymane' };
+  }
+  return { ...z, limit: MAX_CALLS_PER_DAY, searchLimit: MAX_SEARCH_CALLS_PER_DAY, blad: null };
+};
+
+async function callGemini(label: string, params: any) {
   const zSearch = Array.isArray(params?.config?.tools);
-  const response = await getAI().models.generateContent(params);
+
+  // Miejsce w limicie rezerwujemy PRZED żądaniem i od razu zapisujemy na dysk:
+  // wywołanie zakończone błędem czy zabiciem procesu też kosztuje.
+  const numer = await podLiczkiem(async () => {
+    const zuzycie = await aktualneZuzycie();
+    if (zuzycie === 'nieczytelny') {
+      throw new Error(
+        `[Gemini] Licznik wywołań jest nieczytelny — wstrzymuję "${label}". ` +
+          'Napraw lub skasuj plik gemini-usage.json w DATA_DIR albo użyj POST /api/gemini-usage/reset.',
+      );
+    }
+    if (zuzycie.calls >= MAX_CALLS_PER_DAY) {
+      throw new Error(
+        `[Gemini] Dzienny limit wywołań (${MAX_CALLS_PER_DAY}) wyczerpany — wstrzymuję "${label}". ` +
+          'Jeśli to normalny ruch, podnieś GEMINI_MAX_CALLS_PER_DAY w .env na serwerze.',
+      );
+    }
+    if (zSearch && zuzycie.searchCalls >= MAX_SEARCH_CALLS_PER_DAY) {
+      throw new Error(
+        `[Gemini] Dzienny limit wywołań z wyszukiwarką (${MAX_SEARCH_CALLS_PER_DAY}) wyczerpany — ` +
+          `wstrzymuję "${label}". To one kosztują; podnoś GEMINI_MAX_SEARCH_CALLS_PER_DAY świadomie.`,
+      );
+    }
+    const kolejny: GeminiUsage = {
+      day: zuzycie.day,
+      calls: zuzycie.calls + 1,
+      searchCalls: zuzycie.searchCalls + (zSearch ? 1 : 0),
+    };
+    await saveGeminiUsage(kolejny);
+    return kolejny;
+  });
+
+  let response;
+  try {
+    response = await getAI().models.generateContent(params);
+  } catch (e: any) {
+    // Log MUSI objąć też nieudane wywołanie. Stara wersja logowała dopiero po
+    // udanej odpowiedzi — dlatego 21 żądań odrzuconych przez Google 16-18 IX
+    // nie zostawiło w logu ani jednej linii `[Gemini]`, mimo że kosztowały slot
+    // w limicie. Nieudane wywołanie to dokładnie ten przypadek, który chcemy widzieć.
+    console.error(
+      `[Gemini] ${label} (${numer.calls}/${MAX_CALLS_PER_DAY}` +
+        `${zSearch ? `, szukanie ${numer.searchCalls}/${MAX_SEARCH_CALLS_PER_DAY}` : ''})` +
+        ` model=${params.model} BŁĄD: ${e?.message ?? e}`,
+    );
+    throw e;
+  }
 
   const finish = response.candidates?.[0]?.finishReason;
   const usage: any = response.usageMetadata;
   console.log(
-    `[Gemini] ${label} (${callCount}/${MAX_CALLS_PER_DAY}) model=${params.model}` +
+    `[Gemini] ${label} (${numer.calls}/${MAX_CALLS_PER_DAY}` +
+      `${zSearch ? `, szukanie ${numer.searchCalls}/${MAX_SEARCH_CALLS_PER_DAY}` : ''}) model=${params.model}` +
       `${zSearch ? ' +search' : ''} finish=${finish ?? '?'}` +
       ` tokeny: we=${usage?.promptTokenCount ?? '?'} wy=${usage?.candidatesTokenCount ?? '?'}` +
       `${usage?.thoughtsTokenCount ? ` myślenie=${usage.thoughtsTokenCount}` : ''}`,
