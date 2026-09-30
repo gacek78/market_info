@@ -25,7 +25,7 @@ import {
   resetGeminiUsage,
 } from './stateManager';
 import { generatePortfolioSummary } from './geminiService';
-import { runAlertScan, scanAllTargets, sendTelegramMessage, isTelegramConfigured } from './notifier';
+import { runAlertScan, scanAllTargets, sendTelegramMessage, isTelegramConfigured, isPortfolioSummaryEnabled } from './notifier';
 import { fetchPlnCostSeries } from './marketData';
 
 dotenv.config();
@@ -167,7 +167,12 @@ app.get('/api/summary', async (_req: Request, res: Response) => {
 // Synteza podsumowania. Reużywa ostatni pełny skan (np. z crona), jeśli jest świeższy
 // niż SUMMARY_REUSE_MIN minut (domyślnie 300 = 5 h) — pełny skan to kilkanaście wywołań
 // Gemini, więc nie ma sensu powtarzać go po każdym kliknięciu "Generuj".
+// PORTFOLIO_SUMMARY=false blokuje też tę ścieżkę — podsumowanie robi teraz /portfel
+// w kontenerze claude-brief, bez Gemini.
 app.post('/api/summary', async (_req: Request, res: Response) => {
+  if (!isPortfolioSummaryEnabled()) {
+    return res.status(403).json({ error: 'Podsumowanie przez Gemini wyłączone (PORTFOLIO_SUMMARY=false) — użyj /portfel na Telegramie.' });
+  }
   try {
     if (!process.env.API_KEY) return res.status(401).json({ error: 'API key not configured' });
     const reuseMin = Number(process.env.SUMMARY_REUSE_MIN || 300);

@@ -231,8 +231,8 @@ export async function scanAllTargets(): Promise<FullScan> {
   return { signals, globalData, calendar, scanned };
 }
 
-/** Czy generować podsumowanie portfelowe w cyklu (env PORTFOLIO_SUMMARY, domyślnie on). */
-function isPortfolioSummaryEnabled(): boolean {
+/** Czy generować podsumowanie portfelowe przez Gemini — w cyklu i na żądanie (env PORTFOLIO_SUMMARY, domyślnie on). */
+export function isPortfolioSummaryEnabled(): boolean {
   const v = (process.env.PORTFOLIO_SUMMARY ?? '').toLowerCase();
   return v !== 'false' && v !== '0';
 }
