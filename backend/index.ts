@@ -29,6 +29,7 @@ import { runAlertScan, scanAllTargets, sendTelegramMessage, isTelegramConfigured
 import { fetchPlnCostSeries } from './marketData';
 import { buildBondsReport, sendBondsReport } from './bonds';
 import { isPortfelConfigured } from './portfelClient';
+import { startTelegramCommands } from './telegramCommands';
 
 dotenv.config();
 
@@ -325,6 +326,7 @@ if (isTelegramConfigured() && isPortfelConfigured() && BONDS_CRON !== 'off') {
 } else {
   console.log('[Scheduler] Raport obligacji wyłączony (brak Telegrama, PORTFEL_* albo BONDS_CRON=off).');
 }
+if (isTelegramConfigured() && isPortfelConfigured()) startTelegramCommands();
 
 app.listen(Number(port), '0.0.0.0', () => {
   console.log(`Sentinel IKE Backend listening on 0.0.0.0:${port}`);
