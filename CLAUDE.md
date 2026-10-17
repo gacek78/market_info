@@ -88,4 +88,11 @@ There is no test suite, linter, or typecheck script configured. `buildDigestMess
 - `GET /api/signals/recent` — recent scan history
 - `GET /api/gemini-usage` — today's Gemini call count vs the daily cap
 - `GET /api/bonds` — bonds-after-inflation report as JSON · `POST /api/bonds/report` — build and send it to Telegram now
-- `GET|PUT /
+- `GET|PUT /api/strategy` — investor strategy text (free-form), input to the portfolio summary
+- `GET /api/summary` — last generated portfolio summary (cached, no scan) · `POST /api/summary` — full deep scan of all assets + synthesize a fresh `PortfolioSummary` (heavy)
+- `POST /api/alerts/run` — manual scan + Telegram send · `POST /api/alerts/test` — Telegram connectivity check
+- `GET /health`
+
+## Environment variables
+
+`API_KEY` (Gemini, required) · `TELEGRAM_BOT_TOKEN` · `TELEGRAM_CHAT_ID` · `ALERT_SEVERITY` (`low|medium|high`, default `high`) · `ALERT_CRON` (default `0 8 * * *`; supports multiple `;`-separated expressions) · `VALIDATE_SIGNALS` (anti-hallucination check of high-severity signals; set `false`/`0` to disable, default on) · `PORTFOLIO_SUMMARY` (generate + send the personalized "Podsumowanie dla mnie" in the alert cron; set `false`/`0` to disable, default on — when on, the cron may send a message even with no new high-severity signals) · `TZ` (set to `Europe/Warsaw` in compose) · `DATA_DIR` · `PORT`. See `.env.example`.
