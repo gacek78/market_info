@@ -6,11 +6,11 @@
  * (inflacja GUS od dnia zakupu, patrz `wzrostCenOd` w inflation.ts).
  * Bez płatnych API.
  *
- * Harmonogram: BONDS_CRON (index.ts). Ręcznie: POST /api/bonds/report.
+ * Wysyła bot news-brief (@mynews_claude_bot): pobiera GET /api/bonds/messages na komendę
+ * /obligacje i w niedzielę o 18:00 (poller.mjs w repo news-brief).
  */
 import { pobierzZakupyObligacji } from './portfelClient';
 import { pobierzInflacje, wzrostCenOd, dzisPL } from './inflation';
-import { sendTelegramMessage } from './notifier';
 
 export interface BondRow {
   ticker: string;
@@ -135,27 +135,4 @@ export function formatBondsReport(rep: BondsReport): string[] {
   }
   out.push(cur);
   return out;
-}
-
-/** Buduje i wysyła raport. Błąd (portfel/GUS niedostępny) też idzie na Telegram — nie milczymy. */
-export async function sendBondsReport(): Promise<{ sent: number; rows: number; error?: string }> {
-  try {
-    const rep = await buildBondsReport();
-    const msgs = formatBondsReport(rep);
-    let sent = 0;
-    for (const m of msgs) if (await sendTelegramMessage(m)) sent++;
-    console.log(`[Bonds] Raport: ${rep.rows.length} zakupów, wysłano ${sent}/${msgs.length} wiadomości (GUS do ${rep.cpiThrough}).`);
-    if (sent < msgs.length) {
-      const error = `Telegram przyjął ${sent} z ${msgs.length} wiadomości — szczegóły w logu [Notifier]`;
-      console.error(`[Bonds] ${error}`);
-      return { sent, rows: rep.rows.length, error };
-    }
-    return { sent, rows: rep.rows.length };
-  } catch (err) {
-    const msg = (err as Error).message;
-    console.error('[Bonds] Raport obligacji nieudany:', msg);
-    const bezpieczny = msg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    await sendTelegramMessage(`🏦 ⚠️ Raport obligacji się nie udał: ${bezpieczny}`);
-    return { sent: 0, rows: 0, error: msg };
-  }
 }

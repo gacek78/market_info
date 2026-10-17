@@ -27,9 +27,7 @@ import {
 import { generatePortfolioSummary } from './geminiService';
 import { runAlertScan, scanAllTargets, sendTelegramMessage, isTelegramConfigured, isPortfolioSummaryEnabled } from './notifier';
 import { fetchPlnCostSeries } from './marketData';
-import { buildBondsReport, sendBondsReport } from './bonds';
-import { isPortfelConfigured } from './portfelClient';
-import { startTelegramCommands } from './telegramCommands';
+import { buildBondsReport, formatBondsReport } from './bonds';
 
 dotenv.config();
 
@@ -247,12 +245,15 @@ app.get('/api/bonds', async (_req: Request, res: Response) => {
   }
 });
 
-app.post('/api/bonds/report', async (_req: Request, res: Response) => {
-  if (!isTelegramConfigured()) {
-    return res.status(400).json({ error: 'Telegram nie jest skonfigurowany (brak TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID)' });
+// Gotowe wiadomości (HTML) bez wysyłania — pobiera je bot news-brief (@mynews_claude_bot)
+// na komendę /obligacje i w niedzielnym harmonogramie, wysyła swoim botem.
+app.get('/api/bonds/messages', async (_req: Request, res: Response) => {
+  try {
+    return res.json({ messages: formatBondsReport(await buildBondsReport()) });
+  } catch (error: any) {
+    console.error('Bonds messages error:', error);
+    return res.status(500).json({ error: error?.message || 'Bonds report failed' });
   }
-  const result = await sendBondsReport();
-  return res.status(result.error ? 500 : 200).json(result);
 });
 
 // ─── Wykresy cenowe (koszt zakupu w PLN) ────────────────────────────────────
@@ -309,24 +310,6 @@ if (isTelegramConfigured()) {
 } else {
   console.log('[Scheduler] Telegram nie skonfigurowany — powiadomienia wyłączone.');
 }
-
-// Raport obligacji po inflacji — domyślnie niedziela 18:00 (czas polski, TZ w compose).
-// BONDS_CRON=off wyłącza harmonogram; POST /api/bonds/report działa dalej.
-const BONDS_CRON = process.env.BONDS_CRON || '0 18 * * 0';
-if (isTelegramConfigured() && isPortfelConfigured() && BONDS_CRON !== 'off') {
-  if (cron.validate(BONDS_CRON)) {
-    cron.schedule(BONDS_CRON, () => {
-      console.log(`[Scheduler] Raport obligacji (cron: "${BONDS_CRON}")...`);
-      sendBondsReport().catch((err) => console.error('[Scheduler] Raport obligacji nie powiódł się:', err));
-    });
-    console.log(`[Scheduler] Raport obligacji aktywny (cron: "${BONDS_CRON}").`);
-  } else {
-    console.error(`[Scheduler] Nieprawidłowy BONDS_CRON ("${BONDS_CRON}") — raport obligacji wyłączony.`);
-  }
-} else {
-  console.log('[Scheduler] Raport obligacji wyłączony (brak Telegrama, PORTFEL_* albo BONDS_CRON=off).');
-}
-if (isTelegramConfigured() && isPortfelConfigured()) startTelegramCommands();
 
 app.listen(Number(port), '0.0.0.0', () => {
   console.log(`Sentinel IKE Backend listening on 0.0.0.0:${port}`);
