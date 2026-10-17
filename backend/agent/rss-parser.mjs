@@ -1,0 +1,183 @@
+import { XMLParser } from 'fast-xml-parser'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+
+const execFileAsync = promisify(execFile)
+
+const parser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: '@_',
+  parseTagValue: false,
+  parseAttributeValue: false,
+  trimValues: true,
+  // Nie rozwijaj encji w parserze — niektóre feedy (Focus, CHIP) przekraczają
+  // wbudowany limit anty-DoS (1000 encji). Dekodujemy sami w decodeEntities().
+  processEntities: false,
+})
+
+// ---------- helpers ----------
+function toArray(x) {
+  if (x == null) return []
+  return Array.isArray(x) ? x : [x]
+}
+
+function decodeEntities(s) {
+  return String(s || '')
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&amp;/g, '&')
+}
+
+// fast-xml-parser zwraca string dla czystego tekstu, albo obiekt z '#text'
+// gdy element ma atrybuty/zagnieżdżenia
+function text(node) {
+  if (node == null) return ''
+  if (typeof node === 'string') return decodeEntities(node.trim())
+  if (typeof node === 'number') return String(node)
+  if (typeof node === 'object' && node['#text'] != null) return decodeEntities(String(node['#text']).trim())
+  return ''
+}
+
+function stripHtml(raw) {
+  return decodeEntities(
+    String(raw || '').replace(/<[^>]*>/g, ' ')
+  ).replace(/\s+/g, ' ').trim()
+}
+
+// Wybierz najbogatszy opis spośród dostępnych pól. Wiele feedów trzyma w
+// <description>/<summary> tylko krótką zajawkę (czasem = sam tytuł), a pełną
+// treść w <content:encoded>/<content>. Bierzemy najdłuższy po oczyszczeniu z
+// HTML — dzięki temu streszczenia (news brief) mają realny materiał, a nie
+// powtórzenie tytułu. Front i tak przycina zajawkę CSS-em (line-clamp), więc
+// dłuższy desc nie zmienia wyglądu listy.
+function richestDesc(...candidates) {
+  let best = ''
+  for (const c of candidates) {
+    const s = stripHtml(text(c))
+    if (s.length > best.length) best = s
+  }
+  return best.slice(0, 1500)
+}
+
+// Część feedów (np. RMF24) wkleja w <description> miniaturkę i powtórzony
+// tytuł — po zdjęciu HTML zajawka była dosłownie tym samym zdaniem co tytuł,
+// więc karta pokazywała je dwa razy. Zdejmij to echo; gdy poza tytułem nic
+// sensownego nie zostaje, lepiej nie pokazywać zajawki wcale.
+function stripTitleEcho(desc, title) {
+  if (!desc || !title) return desc
+  // podmiana 1:1 na znakach (wielkość liter, warianty cudzysłowów i myślników,
+  // twarda spacja z tytułu vs zwykła w opisie) — dzięki temu indeksy
+  // w znormalizowanym tekście pasują do oryginału
+  const norm = s => s.toLowerCase().replace(/[„”“"’‘'`]/g, '"').replace(/[–—]/g, '-').replace(/\s/g, ' ')
+  const nd = norm(desc)
+  const nt = norm(title)
+  if (nd === nt) return ''
+  if (nd.length !== desc.length || nt.length !== title.length) return desc
+  if (!nd.startsWith(nt)) return desc
+  const rest = desc.slice(title.length).replace(/^[\s.,:;–—-]+/, '')
+  return rest.length < 30 ? '' : rest
+}
+
+// Atom: link może być pojedynczy lub tablica; wybierz rel="alternate" lub bez rel
+function pickAtomLink(link) {
+  const links = toArray(link)
+  if (links.length === 0) return ''
+  const alt = links.find(l => l?.['@_rel'] === 'alternate')
+    || links.find(l => l?.['@_rel'] == null)
+    || links[0]
+  if (typeof alt === 'string') return decodeEntities(alt)
+  return decodeEntities(alt?.['@_href'] || '')
+}
+
+function extractImage(item) {
+  const thumb = item['media:thumbnail']
+  if (thumb) {
+    const t = toArray(thumb)[0]
+    const url = t?.['@_url'] || (typeof t === 'string' ? t : '')
+    if (url.startsWith('http')) return decodeEntities(url)
+  }
+  const mediaContent = item['media:content']
+  if (mediaContent) {
+    const m = toArray(mediaContent).find(x => /image/i.test(x?.['@_type'] || '') || /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(x?.['@_url'] || ''))
+    if (m?.['@_url']) return decodeEntities(m['@_url'])
+  }
+  const enc = item.enclosure
+  if (enc) {
+    const e = toArray(enc).find(x => /image/i.test(x?.['@_type'] || '') || /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(x?.['@_url'] || ''))
+    if (e?.['@_url']) return decodeEntities(e['@_url'])
+  }
+  const raw = text(item['content:encoded']) || text(item.content) || text(item.description) || text(item.summary)
+  const match = raw.match(/<img[^>]+src=["']([^"']+)["']/i)
+  if (match?.[1]?.startsWith('http')) return match[1]
+  return null
+}
+
+function normalizeRss(channel, feedUrl) {
+  const items = toArray(channel.item).slice(0, 40).map(item => {
+    const title = text(item.title)
+    return {
+      title: title || '(bez tytułu)',
+      link: text(item.link) || text(item.guid) || '',
+      desc: stripTitleEcho(richestDesc(item.description, item['content:encoded']), title),
+      image: extractImage(item),
+      pubDate: text(item.pubDate) || null,
+      feedUrl,
+    }
+  })
+  return { title: text(channel.title) || feedUrl, feedUrl, items, cachedAt: new Date().toISOString() }
+}
+
+function normalizeAtom(feed, feedUrl) {
+  const items = toArray(feed.entry).slice(0, 40).map(entry => {
+    const title = text(entry.title)
+    return {
+      title: title || '(bez tytułu)',
+      link: pickAtomLink(entry.link),
+      desc: stripTitleEcho(richestDesc(entry.content, entry.summary), title),
+      image: extractImage(entry),
+      pubDate: text(entry.updated) || text(entry.published) || null,
+      feedUrl,
+    }
+  })
+  return { title: text(feed.title) || feedUrl, feedUrl, items, cachedAt: new Date().toISOString() }
+}
+
+export function parseFeedFromText(xmlText, feedUrl) {
+  // Część serwisów oddaje pod „adresem feedu" zwykłą stronę, i to z HTTP 200
+  // (np. ithardware.pl/rss). Bez tego parser dławił się zagnieżdżeniem tagów
+  // i użytkownik dostawał kryptyczne „Maximum nested tags exceeded".
+  if (/^\s*(<!doctype\s+html|<html[\s>])/i.test(xmlText)) {
+    throw new Error('Ten adres zwraca stronę HTML, a nie kanał RSS')
+  }
+  const doc = parser.parse(xmlText)
+  if (doc.rss?.channel) return normalizeRss(doc.rss.channel, feedUrl)
+  if (doc.feed) return normalizeAtom(doc.feed, feedUrl)
+  // niektóre RSS 1.0 (RDF) mają channel/item bezpośrednio
+  if (doc['rdf:RDF']) {
+    const rdf = doc['rdf:RDF']
+    const channel = { ...rdf.channel, item: rdf.item }
+    return normalizeRss(channel, feedUrl)
+  }
+  throw new Error('Nierozpoznany format kanału (nie RSS/Atom)')
+}
+
+// Pobór przez curl (subproces), NIE node fetch: niektóre serwery (wp.pl, money.pl) blokują
+// fetch/undici na poziomie fingerprintu TLS/HTTP klienta i zwracają HTTP 449, mimo identycznego
+// User-Agent — curl z tym samym UA przechodzi bez problemu. Zweryfikowane bezpośrednio na OMV.
+export async function parseFeed(feedUrl) {
+  const { stdout } = await execFileAsync('curl', [
+    '-sL', '--max-time', '12',
+    '-A', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    '-w', '\n%{http_code}', feedUrl,
+  ], { maxBuffer: 20 * 1024 * 1024, encoding: 'utf8' })
+  const sep = stdout.lastIndexOf('\n')
+  const status = Number(stdout.slice(sep + 1))
+  const body = stdout.slice(0, sep)
+  if (status < 200 || status >= 300) throw new Error(`HTTP ${status}`)
+  return parseFeedFromText(body, feedUrl)
+}

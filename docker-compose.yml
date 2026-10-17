@@ -34,12 +34,19 @@ services:
       - GEMINI_MAX_SEARCH_CALLS_PER_DAY=${GEMINI_MAX_SEARCH_CALLS_PER_DAY:-25}
       - GEMINI_MAX_SEARCH_CALLS_PER_MONTH=${GEMINI_MAX_SEARCH_CALLS_PER_MONTH:-900}
       - GEMINI_MAX_COST_PLN_PER_MONTH=${GEMINI_MAX_COST_PLN_PER_MONTH:-5}
-      # Raport obligacji po inflacji (wysyła bot news-brief) — zakupy z aplikacji portfel (sieć portfel_network)
+      # Raport obligacji po inflacji (/obligacje, niedziela 18:00) — zakupy z aplikacji portfel (sieć portfel_network)
+      - BONDS_CRON=${BONDS_CRON:-0 18 * * 0}
       - PORTFEL_API_URL=${PORTFEL_API_URL:-http://portfel_api:8000/api}
       - PORTFEL_TOKEN=${PORTFEL_TOKEN:-}
+      # Agent Claude Code (/portfel, /analiza) — logowanie subskrypcją, konfiguracja na wolumenie danych
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - CLAUDE_CONFIG_DIR=/app/data/.claude
+      - PORTFEL_CRON=${PORTFEL_CRON:-30 16 * * *}
     volumes:
       - ./backend:/app
       - /app/node_modules
+      # Baza aplikacji portfel (stan IKE dla /portfel) — tylko odczyt, czyta agent/portfel-stan.py
+      - /compose/portfel/backend/data:/portfel-data:ro
     networks:
       - default
       - portfel_network

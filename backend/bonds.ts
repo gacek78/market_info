@@ -6,8 +6,8 @@
  * (inflacja GUS od dnia zakupu, patrz `wzrostCenOd` w inflation.ts).
  * Bez płatnych API.
  *
- * Wysyła bot news-brief (@mynews_claude_bot): pobiera GET /api/bonds/messages na komendę
- * /obligacje i w niedzielę o 18:00 (poller.mjs w repo news-brief).
+ * Wysyła bot market_info: komenda /obligacje i BONDS_CRON (domyślnie niedziela 18:00),
+ * patrz sendBondsReport w telegramCommands.ts.
  */
 import { pobierzZakupyObligacji } from './portfelClient';
 import { pobierzInflacje, wzrostCenOd, dzisPL } from './inflation';

@@ -28,6 +28,9 @@ import { generatePortfolioSummary } from './geminiService';
 import { runAlertScan, scanAllTargets, sendTelegramMessage, isTelegramConfigured, isPortfolioSummaryEnabled } from './notifier';
 import { fetchPlnCostSeries } from './marketData';
 import { buildBondsReport, formatBondsReport } from './bonds';
+import { isPortfelConfigured } from './portfelClient';
+import { startTelegramCommands, sendBondsReport } from './telegramCommands';
+import { runPortfel, isAgentConfigured } from './portfelAgent';
 
 dotenv.config();
 
@@ -169,7 +172,7 @@ app.get('/api/summary', async (_req: Request, res: Response) => {
 // niż SUMMARY_REUSE_MIN minut (domyślnie 300 = 5 h) — pełny skan to kilkanaście wywołań
 // Gemini, więc nie ma sensu powtarzać go po każdym kliknięciu "Generuj".
 // PORTFOLIO_SUMMARY=false blokuje też tę ścieżkę — podsumowanie robi teraz /portfel
-// w kontenerze claude-brief, bez Gemini.
+// (agent Claude w portfelAgent.ts), bez Gemini.
 app.post('/api/summary', async (_req: Request, res: Response) => {
   if (!isPortfolioSummaryEnabled()) {
     return res.status(403).json({ error: 'Podsumowanie przez Gemini wyłączone (PORTFOLIO_SUMMARY=false) — użyj /portfel na Telegramie.' });
@@ -245,8 +248,7 @@ app.get('/api/bonds', async (_req: Request, res: Response) => {
   }
 });
 
-// Gotowe wiadomości (HTML) bez wysyłania — pobiera je bot news-brief (@mynews_claude_bot)
-// na komendę /obligacje i w niedzielnym harmonogramie, wysyła swoim botem.
+// Gotowe wiadomości (HTML) bez wysyłania — podgląd raportu; wysyła je /obligacje i BONDS_CRON.
 app.get('/api/bonds/messages', async (_req: Request, res: Response) => {
   try {
     return res.json({ messages: formatBondsReport(await buildBondsReport()) });
@@ -309,6 +311,31 @@ if (isTelegramConfigured()) {
   }
 } else {
   console.log('[Scheduler] Telegram nie skonfigurowany — powiadomienia wyłączone.');
+}
+
+// ─── Komendy Telegram i harmonogramy portfela ───────────────────────────────
+// /portfel, /analiza (agent Claude) i /obligacje — na bocie market_info. Wcześniej robił to
+// bot news-brief; od 17.10.2026 wszystkie powiadomienia finansowe idą stąd.
+// Wyrażenie "off" wyłącza dany harmonogram; komenda na Telegramie działa dalej.
+function zaplanuj(nazwa: string, expr: string, zadanie: () => Promise<void>): void {
+  if (expr === 'off') return console.log(`[Scheduler] ${nazwa}: harmonogram wyłączony (off).`);
+  if (!cron.validate(expr)) return console.error(`[Scheduler] ${nazwa}: nieprawidłowy cron "${expr}" — harmonogram wyłączony.`);
+  cron.schedule(expr, () => {
+    zadanie().catch((err) => console.error(`[Scheduler] ${nazwa} nie powiódł się:`, err));
+  });
+  console.log(`[Scheduler] ${nazwa} aktywny (cron: "${expr}").`);
+}
+if (isTelegramConfigured()) {
+  startTelegramCommands();
+  if (isPortfelConfigured()) {
+    zaplanuj('Raport obligacji', process.env.BONDS_CRON || '0 18 * * 0', () => sendBondsReport('harmonogram'));
+  }
+  if (isAgentConfigured()) {
+    // 16:30 — po skanie market_info (cron wt i pt). runPortfel sam pomija dni, gdy miesiąc już kupiony.
+    zaplanuj('Podsumowanie portfela', process.env.PORTFEL_CRON || '30 16 * * *', () => runPortfel('harmonogram 16:30', { scheduled: true }));
+  } else {
+    console.log('[Scheduler] Agent Claude nieskonfigurowany (brak CLAUDE_CODE_OAUTH_TOKEN) — /portfel i /analiza nieaktywne.');
+  }
 }
 
 app.listen(Number(port), '0.0.0.0', () => {
