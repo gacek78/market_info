@@ -34,6 +34,17 @@ services:
       - GEMINI_MAX_SEARCH_CALLS_PER_DAY=${GEMINI_MAX_SEARCH_CALLS_PER_DAY:-25}
       - GEMINI_MAX_SEARCH_CALLS_PER_MONTH=${GEMINI_MAX_SEARCH_CALLS_PER_MONTH:-900}
       - GEMINI_MAX_COST_PLN_PER_MONTH=${GEMINI_MAX_COST_PLN_PER_MONTH:-5}
+      # Raport obligacji po inflacji — zakupy z aplikacji portfel (sieć portfel_network)
+      - BONDS_CRON=${BONDS_CRON:-0 18 * * 0}
+      - PORTFEL_API_URL=${PORTFEL_API_URL:-http://portfel_api:8000/api}
+      - PORTFEL_TOKEN=${PORTFEL_TOKEN:-}
     volumes:
       - ./backend:/app
       - /app/node_modules
+    networks:
+      - default
+      - portfel_network
+
+networks:
+  portfel_network:
+    external: true
