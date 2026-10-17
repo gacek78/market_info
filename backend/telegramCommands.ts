@@ -9,6 +9,7 @@
  *   /portfel        — gdzie wpłacić miesięczny budżet (agent Claude, portfelAgent.ts)
  *   /analiza [co]   — lista ocen albo świeży research jednego aktywa (agent Claude)
  *   /obligacje      — raport obligacji po inflacji (bonds.ts, bez AI)
+ *   /help (/pomoc, /start) — lista komend z opisem; menu „/” ustawia setMyCommands przy starcie
  */
 import { buildBondsReport, formatBondsReport } from './bonds';
 import { sendTelegramMessage } from './notifier';
@@ -17,11 +18,42 @@ import { runPortfel, runAnaliza, isAgentConfigured } from './portfelAgent';
 const POLL_TIMEOUT_S = 50;
 
 const POMOC = [
-  'Dostępne komendy:',
-  '/portfel — gdzie wpłacić miesięczny budżet (na podstawie portfela z aplikacji; też codziennie 16:30)',
-  '/analiza — oceny wszystkich aktywów; /analiza xtb — świeży research jednej pozycji',
-  '/obligacje — obligacje po inflacji: wykup na rękę dziś i wartość realna (też co niedzielę 18:00)',
+  '<b>Komendy bota market_info</b>',
+  '',
+  '/portfel — gdzie wpłacić miesięczny budżet IKE. Agent czyta portfel z aplikacji, robi świeży '
+    + 'research każdej pozycji i przysyła dwie wiadomości: ocenę aktywów i podział wpłaty. '
+    + 'Trwa kilkanaście minut. Sam przychodzi codziennie o 16:30, dopóki miesiąc nie jest kupiony.',
+  '',
+  '/analiza — lista ocen wszystkich aktywów z ostatnich notatek (bez nowego researchu).',
+  '/analiza xtb — świeży research jednej pozycji i pełna notatka. Działa też dla aktywa spoza portfela.',
+  '',
+  '/obligacje — obligacje skarbowe po inflacji: ile dostałbyś na rękę przy wykupie dziś '
+    + 'i ile to warte w pieniądzu z dnia zakupu. Kilka sekund, bez AI. Sam przychodzi w niedzielę o 18:00.',
+  '',
+  '/help — ta lista.',
 ].join('\n');
+
+// Menu po wpisaniu „/” w Telegramie (opisy do 256 znaków, bez HTML).
+const MENU = [
+  { command: 'portfel', description: 'Gdzie wpłacić miesięczny budżet IKE (kilkanaście minut)' },
+  { command: 'analiza', description: 'Oceny aktywów; /analiza xtb — research jednej pozycji' },
+  { command: 'obligacje', description: 'Obligacje po inflacji: wykup na rękę i wartość realna' },
+  { command: 'help', description: 'Lista komend z opisem' },
+];
+
+async function ustawMenu(token: string): Promise<void> {
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ commands: MENU }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) console.error('[Telegram] Nie udało się ustawić menu komend:', res.status, await res.text());
+  } catch (err) {
+    console.error('[Telegram] Nie udało się ustawić menu komend:', (err as Error).message);
+  }
+}
 
 interface Update {
   update_id: number;
@@ -69,7 +101,7 @@ async function obsluz(text: string): Promise<void> {
     } else {
       await runAnaliza(arg);
     }
-  } else if (komenda === '/start' || komenda === '/pomoc') {
+  } else if (komenda === '/start' || komenda === '/pomoc' || komenda === '/help') {
     await sendTelegramMessage(POMOC);
   }
 }
@@ -80,6 +112,7 @@ export function startTelegramCommands(): void {
   if (!token || !chatId) return;
 
   (async () => {
+    await ustawMenu(token);
     let offset = 0;
     // Komendy wysłane, gdy backend nie działał, pomijamy — po restarcie nie chcemy serii raportów.
     try {
