@@ -3,7 +3,8 @@
  *
  * Wycenę każdej serii (odsetki, kara za wcześniejszy wykup, Belka 19%) liczy portfel —
  * tu jej nie powtarzamy. Bierzemy `GET /api/portfolio/bonds/purchases`, gdzie każdy
- * zakup ma `exit_net_value` = wykup na rękę dziś i `paid_coupons` = kupony już wypłacone.
+ * zakup ma `exit_net_value` = wykup na rękę dziś, `net_value` = to samo bez kary
+ * i `paid_coupons` = kupony już wypłacone.
  *
  * Konfiguracja (.env): PORTFEL_API_URL (np. http://portfel_api:8000/api) i
  * PORTFEL_TOKEN — ta sama wartość co INTERNAL_API_TOKEN w .env portfela.
@@ -15,6 +16,7 @@ export interface BondPurchase {
   date: string;          // RRRR-MM-DD
   quantity: number;      // sztuk po 100 zł nominału (po odjęciu umorzonych)
   exitNetValue: number;  // wykup na rękę dziś (po karze i Belce), PLN
+  netValue: number;      // wartość dziś bez kary (po Belce) — gdy trzymasz dalej, PLN
   paidCouponsNet: number; // kupony już wypłacone, po Belce, PLN (COI/ROR/DOR; reszta 0)
   partlyRedeemed: boolean;
 }
@@ -22,7 +24,7 @@ export interface BondPurchase {
 interface PortfelPosition {
   ticker: string;
   quantity: number;
-  bond_purchases?: { date: string; quantity: number; exit_net_value?: number; paid_coupons?: number }[];
+  bond_purchases?: { date: string; quantity: number; net_value?: number; exit_net_value?: number; paid_coupons?: number }[];
 }
 
 const BELKA = 0.19;
@@ -53,14 +55,15 @@ export async function pobierzZakupyObligacji(): Promise<BondPurchase[]> {
     // robimy to samo per zakup, żeby suma zgadzała się z portfelem.
     const ratio = Math.min(1, pos.quantity / kupione);
     for (const p of lista) {
-      if (p.exit_net_value === undefined || p.paid_coupons === undefined) {
-        throw new Error('portfel nie zwraca exit_net_value/paid_coupons — wdróż nowszą wersję portfela');
+      if (p.exit_net_value === undefined || p.paid_coupons === undefined || p.net_value === undefined) {
+        throw new Error('portfel nie zwraca net_value/exit_net_value/paid_coupons — wdróż nowszą wersję portfela');
       }
       zakupy.push({
         ticker: pos.ticker,
         date: p.date.slice(0, 10),
         quantity: p.quantity * ratio,
         exitNetValue: p.exit_net_value * ratio,
+        netValue: p.net_value * ratio,
         paidCouponsNet: p.paid_coupons * (1 - BELKA) * ratio,
         partlyRedeemed: ratio < 1,
       });
