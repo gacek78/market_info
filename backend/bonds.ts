@@ -56,23 +56,32 @@ const DZIEN_MS = 86_400_000;
 const isoDzien = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const msDnia = (iso: string) => Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)));
 
+/** Od kiedy inflacja jest szacowana, nie zmierzona: dzień po ostatnim miesiącu GUS albo dzień zakupu, jeśli późniejszy. */
+function startSzacunku(dataZakupu: string, cpiThrough: string | null): number {
+  const poGus = cpiThrough
+    ? Date.UTC(Number(cpiThrough.slice(0, 4)), Number(cpiThrough.slice(5, 7)), 1) // 1. dzień następnego miesiąca
+    : msDnia(dataZakupu);
+  return Math.max(poGus, msDnia(dataZakupu));
+}
+
+/** Wzrost cen od `start` do `ms` przy stałej inflacji `cpi` r/r (1 = brak wzrostu). */
+const wzrostStaly = (cpi: number, start: number, ms: number) =>
+  Math.pow(1 + cpi, Math.max(0, ms - start) / DZIEN_MS / 365);
+
 /**
  * Pierwszy dzień, w którym wykup na rękę (z kuponami) jest realnie wart co najmniej wpłatę.
  * Inflacja do ostatniego miesiąca GUS — zmierzona (`wzrost`), potem stała `assumedCpi` r/r
- * (od dnia po tym miesiącu albo od dnia zakupu, jeśli późniejszy). Między tygodniowymi
- * punktami portfela — interpolacja liniowa (odsetki rosną liniowo, więc błąd to grosze).
+ * (od `startSzacunku`). Między tygodniowymi punktami portfela — interpolacja liniowa
+ * (odsetki rosną liniowo, więc błąd to grosze).
  */
 function wyjscieZeStraty(
   paid: number, naRekeDzis: number, dataZakupu: string, wzrost: number,
   cpiThrough: string | null, punkty: { date: string; value: number }[],
   assumedCpi: number, dzis: string,
 ): ExitBreakEven | null {
-  const poGus = cpiThrough
-    ? Date.UTC(Number(cpiThrough.slice(0, 4)), Number(cpiThrough.slice(5, 7)), 1) // 1. dzień następnego miesiąca
-    : msDnia(dataZakupu);
-  const startStalej = Math.max(poGus, msDnia(dataZakupu));
+  const startStalej = startSzacunku(dataZakupu, cpiThrough);
   const nadwyzka = (ms: number, value: number) =>
-    value / (wzrost * Math.pow(1 + assumedCpi, Math.max(0, ms - startStalej) / DZIEN_MS / 365)) - paid;
+    value / (wzrost * wzrostStaly(assumedCpi, startStalej, ms)) - paid;
 
   let prevMs = msDnia(dzis);
   let prev = nadwyzka(prevMs, naRekeDzis);
@@ -132,7 +141,13 @@ export async function buildBondsReport(now = new Date()): Promise<BondsReport> {
     const cpi = await pobierzInflacje(Number(zakupy[0].date.slice(0, 4)), now);
     cpiThrough = cpi.lastPublished;
     for (const z of zakupy) {
-      const wzrost = wzrostCenOd(z.date, cpi);
+      const wzrostGus = wzrostCenOd(z.date, cpi);
+      // Miesiące, których GUS jeszcze nie ogłosił: szacunek z ostatniego odczytu r/r — ten sam,
+      // którego używa prognoza wyjścia ze straty, żeby obie liczby szły tą samą miarą.
+      // Bez prognozy (portfel nie odpowiedział) zostaje 0% i nagłówek to mówi.
+      const wzrost = progn
+        ? wzrostGus * wzrostStaly(progn.assumedCpi, startSzacunku(z.date, cpiThrough), msDnia(dzis))
+        : wzrostGus;
       const paid = 100 * z.quantity;
       // Kupony już wypłacone (COI/ROR/DOR) są częścią tego, co inwestycja dała — bez nich
       // seria kuponowa wychodzi na fałszywą stratę. Uproszczenie: dzielimy je przez inflację
@@ -159,7 +174,7 @@ export async function buildBondsReport(now = new Date()): Promise<BondsReport> {
         maturity: dataWykupu(z.ticker, z.date),
         partlyRedeemed: z.partlyRedeemed,
         exitBreakEven: realValue < paid && progn?.points.has(z.key)
-          ? wyjscieZeStraty(paid, naReke, z.date, wzrost, cpiThrough, progn.points.get(z.key)!, progn.assumedCpi, dzis)
+          ? wyjscieZeStraty(paid, naReke, z.date, wzrostGus, cpiThrough, progn.points.get(z.key)!, progn.assumedCpi, dzis)
           : undefined,
       });
     }
@@ -204,8 +219,13 @@ export function formatBondsReport(rep: BondsReport): string[] {
       + 'Bez kary = ile jest warta dziś, gdy trzymasz dalej (kara znika w dniu wykupu). '
       + 'Realnie = w pieniądzu z dnia zakupu.</i>',
     rep.cpiThrough
-      ? `Inflacja GUS do: <b>${miesiacPL(rep.cpiThrough)}</b>; późniejsze dni liczone bez inflacji.`
-      : 'Inflacja GUS: brak opublikowanych danych od dnia zakupu — liczone bez inflacji.',
+      ? `Inflacja GUS do: <b>${miesiacPL(rep.cpiThrough)}</b>; `
+        + (rep.projection
+          ? `późniejsze dni — szacunek ${pct(rep.projection.assumedCpi * 100)} rok do roku (ostatni odczyt GUS).`
+          : 'późniejsze dni liczone bez inflacji (prognoza niedostępna).')
+      : rep.projection
+        ? `Inflacja GUS: brak opublikowanych danych od dnia zakupu — szacunek ${pct(rep.projection.assumedCpi * 100)} rok do roku.`
+        : 'Inflacja GUS: brak opublikowanych danych od dnia zakupu — liczone bez inflacji.',
   ];
   if (rep.cpiStale) head.push('⚠️ <b>Dane GUS są starsze niż 2 miesiące — sprawdź źródło, wynik realny jest zawyżony.</b>');
   if (rep.projection) {
