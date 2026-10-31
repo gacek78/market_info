@@ -42,6 +42,7 @@ services:
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
       - CLAUDE_CONFIG_DIR=/app/data/.claude
       - PORTFEL_CRON=${PORTFEL_CRON:-30 16 * * *}
+      - AGENT_MODEL=${AGENT_MODEL:-opus}
     volumes:
       - ./backend:/app
       - /app/node_modules

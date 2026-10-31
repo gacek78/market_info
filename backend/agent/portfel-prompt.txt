@@ -72,6 +72,29 @@ o tym, czy w ogóle zostaje w planie.
 
 Sprawdź dzisiejszą datę: `date +%F`.
 
+=== KROKI OBOWIĄZKOWE — przy KAŻDYM uruchomieniu, także drugim tego samego dnia ===
+
+Notatki z dzisiejszą datą NIE zwalniają z researchu — mogą być z rana, a świat się
+zmienił. Zanim napiszesz wiadomość, wykonaj wszystkie poniższe kroki:
+1. Ceny wszystkich pozycji z Yahoo i kursy EUR/PLN, USD/PLN z Frankfurtera.
+2. `node /app/agent/sec-wyniki.mjs` dla MSFT, GOOGL, AMZN, AAPL, NVDA, META — dla XNAS
+   i VWCE; zapisz datę i najważniejsze liczby ostatnich wyników każdej z nich.
+3. Strona GUS z wskaźnikami cen (źródło 7) — ostatni odczyt inflacji w Polsce z datą.
+4. Co najmniej 2 kanały RSS (bankier.pl i NYT Business).
+5. **Co najmniej 3 wyszukiwania `WebSearch` na każde aktywo** (po polsku i angielsku:
+   najnowsze wiadomości, popyt / konkurencja, nadchodzące terminy) i co najmniej 3 na
+   świat i Polskę. Tropy z kroku 3 „JAK ROBIĆ RESEARCH" — dodatkowo.
+6. Każdą notatkę zapisz **od nowa w całości** (narzędziem Write, cały plik) wg formatu
+   z „NOTATKI Z RESEARCHU". Nie dopisuj bloków „Aktualizacja <data>" nad starą treścią —
+   stara treść ma zniknąć albo zostać przepisana na dziś. Jeden nagłówek „Dziennik
+   zmian"; wpisy krótkie, jeden na uruchomienie, najwyżej 10 ostatnich.
+7. Kontrola notatki (sekcja niżej) i reguła dwóch miesięcy (sekcja „JAK DZIELIĆ WPŁATĘ").
+
+Na samym końcu, po wysłaniu wiadomości, wypisz raport (trafia do logu backendu):
+`KROKI: ceny=<tak/nie> sec=<lista tickerów> gus=<odczyt i data albo „nie znalazłem”>
+rss=<liczba> websearch=<liczba łącznie> notatki_od_nowa=<lista plików>`
+Jeśli któregoś kroku nie dało się zrobić — napisz w raporcie dlaczego.
+
 === JAK ROBIĆ RESEARCH — za każdym razem od nowa ===
 
 **Research robisz świeży przy KAŻDYM uruchomieniu**, dla każdego aktywa. Nie przepisuj
@@ -370,4 +393,5 @@ Potem zrób POST na `https://api.telegram.org/bot<TOKEN>/sendMessage`. Wyślij o
 wiadomości po kolei (najpierw 1, potem 2). Sprawdź `"ok"` w każdej odpowiedzi;
 jeśli `false` — popraw i wyślij ponownie. Wiadomość ponad 4000 znaków — skróć ją.
 
-Na końcu napisz jednym zdaniem, co wysłałeś i które notatki zaktualizowałeś.
+Na końcu napisz jednym zdaniem, co wysłałeś, a pod spodem raport `KROKI:` (sekcja
+„KROKI OBOWIĄZKOWE").

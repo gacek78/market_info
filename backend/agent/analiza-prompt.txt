@@ -28,7 +28,9 @@ przeczytaj ją i trzymaj się tego formatu, bo z tych samych notatek korzysta /p
    przybywa, czy coś je wypiera) — nie tylko o konkurencję. Notatka musi mieć wypełnioną
    sekcję „Popyt na to, na czym firma buduje przyszłość" (format w portfel-prompt.txt).
 3. Wynik pozycji inwestora: ilość z bazy × cena × kurs vs `wklad_pln` (dane w sekcji ZADANIE).
-4. Przepisz notatkę (zachowaj i uzupełnij dziennik zmian — dopisz dzisiejszy wpis,
+   Co najmniej 5 wyszukiwań `WebSearch` na to aktywo, także gdy notatka jest z dziś.
+4. Przepisz notatkę od nowa w całości (Write, cały plik; bez bloków „Aktualizacja <data>"
+   nad starą treścią; jeden nagłówek „Dziennik zmian") (zachowaj i uzupełnij dziennik zmian — dopisz dzisiejszy wpis,
    zaznacz, czy ocena się zmieniła i dlaczego).
    Stosuj „Kontrolę notatki" i zasady „PROSTY JĘZYK" z `/app/agent/portfel-prompt.txt`.
    Wydarzenia z „Co obserwować", które już minęły, przenieś do „Co się ostatnio wydarzyło"

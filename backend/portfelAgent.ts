@@ -19,6 +19,10 @@ const TOOLS = 'Bash Edit Write Read Glob Grep WebSearch WebFetch';
 // Bezpiecznik: zawieszony agent nie może blokować komend na zawsze. Typowy /portfel trwa
 // kilkanaście minut (research kilku aktywów), więc godzina łapie tylko awarię.
 const AGENT_TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_MIN || 60) * 60_000;
+// Bez --model claude -p brał domyślny Sonnet, który robił 2–3-minutowy przegląd zamiast
+// researchu (2–12 wyszukiwań na 7 aktywów, pomiar 21–31.10.2026). Opus zużywa szybciej
+// limit subskrypcji — nie pieniądze.
+const AGENT_MODEL = process.env.AGENT_MODEL || 'opus';
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const tg = (text: string) => sendTelegramMessage(esc(text));
@@ -81,7 +85,7 @@ function spawnClaude(prompt: string, co: string): void {
   const start = Date.now();
   console.log(`[Agent] Start: ${co}`);
   // --allowedTools zamiast --dangerously-skip-permissions (ta druga jest blokowana dla roota).
-  const p = spawn('claude', ['-p', prompt, '--allowedTools', TOOLS], {
+  const p = spawn('claude', ['-p', prompt, '--model', AGENT_MODEL, '--allowedTools', TOOLS], {
     cwd: path.join(__dirname, 'data'),
     stdio: ['ignore', 'inherit', 'inherit'],
     env: process.env,
