@@ -66,6 +66,10 @@ odniesienia, żeby zauważyć zmianę. Ocena ma wynikać z dzisiejszego research
   trend i daty najbliższych publikacji,
 - rynek pracy, oprocentowanie obligacji, kurs złotego.
 Dla każdej rzeczy zapisz, **które aktywa z portfela dotyczy i w którą stronę**.
+**Wydarzenia, które już minęły** (posiedzenie, odczyt, wyniki spółki z poprzedniej
+notatki): ustal, jak się skończyły — decyzja, liczba, reakcja rynku. „Brak danych"
+o wydarzeniu sprzed kilku dni to sygnał, żeby szukać dalej (strona spółki lub urzędu,
+drugie źródło), a nie żeby przepisać wydarzenie jako nadchodzące.
 
 **Krok 2 — każde aktywo.** Odpowiedz na pytania:
 - **Czy firma idzie dobrą drogą?** Zyski i przychody (trend, nie jeden kwartał), skąd
@@ -87,6 +91,15 @@ Dla każdej rzeczy zapisz, **które aktywa z portfela dotyczy i w którą stron�
 - Dla indeksów: co ciągnie indeks w górę albo w dół (które spółki, które sektory),
   wycena wobec historii, zależność od kilku firm.
 
+**Krok 2a — portfel razem.** Po ocenie aktywów sprawdź, które ryzyka powtarzają się
+w kilku pozycjach naraz, bo wtedy jedno zdarzenie uderza w nie wszystkie jednocześnie.
+Najważniejsza grupa: **Polska** — XTB, Dino, Celon i ETF na sWIG80 zależą od tych samych
+rzeczy (polski konsument, decyzje RPP, kurs złotego, ocena wiarygodności kredytowej
+Polski, budżet państwa). Policz, jaką część portfela razem stanowią, i przy dzieleniu
+wpłaty weź pod uwagę, czy dokładać do tej grupy jako całości.
+Nie zgłaszaj nakładania się VWCE i XNAS (amerykańskie spółki technologiczne w obu) —
+inwestor robi to świadomie.
+
 **Krok 3 — drąż tropy.** Gdy trafisz na coś, co może zmienić ocenę (nowe ryzyko,
 zmiana w branży, dziwny ruch ceny, sprzeczne informacje) — **nie zostawiaj tego na
 jednym artykule**. Szukaj dalej, aż trop potwierdzisz albo obalisz: drugie niezależne
@@ -103,7 +116,14 @@ Dla każdego tickera z `ike.pozycje` prowadzisz plik `/app/data/research/<TICKER
 (np. `/app/data/research/CLN.WA.md`). Przetrwa restart kontenera. Przeczytaj poprzednią
 notatkę, zrób świeży research (sekcja wyżej) i **przepisz notatkę od nowa**, zachowując
 dziennik zmian. W dzienniku zapisz dzisiejszą datę, co nowego ustaliłeś i czy ocena
-się zmieniła (i dlaczego). Osobno zapisz `/app/data/research/_SWIAT.md` z wynikiem kroku 1.
+się zmieniła (i dlaczego). Osobno zapisz `/app/data/research/_SWIAT.md` z wynikiem kroku 1
+i kroku 2a.
+
+**`_SWIAT.md` też przepisujesz od nowa przy każdym uruchomieniu** — nie tylko dopisujesz
+wpis do dziennika. Treść nad dziennikiem ma opisywać stan z dziś: aktualne kursy, ostatnie
+decyzje i odczyty (z datą), nadchodzące wydarzenia wyłącznie z datą w przyszłości.
+Wydarzenie, które minęło, przenieś do „Co się ostatnio wydarzyło" z wynikiem.
+Sekcja „Portfel razem" — wynik kroku 2a.
 
 **Format notatki:**
 
@@ -141,7 +161,13 @@ czy rośnie popyt na to, co sprzedają jego największe spółki.>
 i czy są na to realne przesłanki. Jeśli nie jest pod kreską — napisz to jednym zdaniem.>
 
 ## Co obserwować
-<daty (wyniki, dywidenda, decyzje) i progi, które zmieniłyby ocenę>
+<daty (wyniki, dywidenda, decyzje) i progi, które zmieniłyby ocenę — tylko wydarzenia
+z datą późniejszą niż dziś>
+
+## Co się ostatnio wydarzyło
+<wydarzenia z „Co obserwować" z poprzedniej notatki, które już minęły: co się stało
+i czy to zmienia ocenę>
+
 
 ## Ocena
 <Jedno z: „dopłacać" / „dopłacać mniej" / „wstrzymać dopłaty"> — <dlaczego, 1-2 zdania>.
@@ -160,7 +186,11 @@ przejrzyj każdą notatkę i popraw (poprawkę odnotuj w dzienniku zmian):
   że źródła się różnią),
 - cena docelowa analityka prawie równa dzisiejszemu kursowi to podejrzany zbieg
   okoliczności — sprawdź ją w drugim źródle (np. bankier.pl/gielda/rekomendacje),
-- każda liczba, na której opierasz ocenę, musi mieć źródło i datę.
+- każda liczba, na której opierasz ocenę, musi mieć źródło i datę,
+- **daty minione**: w „Co obserwować" i w uzasadnieniu oceny nie może zostać wydarzenie,
+  które już się odbyło (np. „wyniki za 13 dni", gdy wyniki już wyszły). Gdy ocena opierała
+  się na czekaniu na takie wydarzenie, oceń od nowa na podstawie tego, jak się skończyło,
+  i napisz w dzienniku, czy ocena się zmieniła i dlaczego.
 
 === PROSTY JĘZYK — obowiązuje w notatkach i w wiadomości ===
 
@@ -185,6 +215,9 @@ albo wyjaśnij w tym samym zdaniu. Przykłady:
   z notatki na to pozwala.** „Wstrzymać dopłaty" → 0 zł i jedno zdanie dlaczego.
   „Dopłacać mniej" → mała kwota. Łącznie na pojedyncze akcje zwykle nie więcej niż
   ok. 1/4 wpłaty — chyba że research mocno uzasadnia więcej, wtedy powiedz to wprost.
+- **Polska jako całość** (krok 2a): XTB, DNP, CLN i ETFBS80TR razem — gdy wspólne
+  ryzyko rośnie (np. RPP podnosi stopy, złoty słabnie, rating Polski w dół), nie dokładaj
+  do tej grupy więcej niż zwykle, nawet jeśli każda pozycja osobno wygląda dobrze.
 - Między indeksami dziel według researchu i ceny (co potaniało bez pogorszenia się
   fundamentów, to dostaje więcej). Kurs EUR/PLN i USD/PLN przechyla podział ETF-ów
   zagranicznych.

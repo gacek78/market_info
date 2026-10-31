@@ -27,6 +27,8 @@ przeczytaj ją i trzymaj się tego formatu, bo z tych samych notatek korzysta /p
 4. Przepisz notatkę (zachowaj i uzupełnij dziennik zmian — dopisz dzisiejszy wpis,
    zaznacz, czy ocena się zmieniła i dlaczego).
    Stosuj „Kontrolę notatki" i zasady „PROSTY JĘZYK" z `/app/agent/portfel-prompt.txt`.
+   Wydarzenia z „Co obserwować", które już minęły, przenieś do „Co się ostatnio wydarzyło"
+   z wynikiem i oceń od nowa, jeśli ocena na nie czekała.
    W „W skrócie" zawsze napisz, **dlaczego** kurs rośnie albo spada — przyczynę, nie sam ruch.
 5. Wyślij na Telegram notatkę w wersji do czytania: zacznij od
    „🔎 <Nazwa> — ocena: <ocena>", potem sekcje notatki bez dziennika zmian
