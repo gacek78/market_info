@@ -70,6 +70,23 @@ o tym, czy w ogóle zostaje w planie.
    Znajdź tytuł „Szybki szacunek…" albo „Wskaźniki cen towarów i usług konsumpcyjnych…"
    za właściwy miesiąc i pobierz komunikat (link z `curl -sL -A "Mozilla/5.0" <ta strona>`).
 
+**8. Gospodarka Polski z GUS** — dotyczy zwłaszcza Dino, XTB i ETF-u na sWIG80. Listy
+   komunikatów (tak samo jak inflacja: tytuł → link → komunikat):
+   - nastroje konsumentów: `https://stat.gov.pl/obszary-tematyczne/koniunktura/koniunktura/`
+     („Koniunktura konsumencka – <miesiąc>"),
+   - płace i zatrudnienie: `https://stat.gov.pl/obszary-tematyczne/rynek-pracy/pracujacy-zatrudnieni-wynagrodzenia-koszty-pracy/`
+     („Przeciętne zatrudnienie i wynagrodzenie w sektorze przedsiębiorstw w <miesiąc>"),
+   - PKB: `https://stat.gov.pl/obszary-tematyczne/rachunki-narodowe/kwartalne-rachunki-narodowe/`.
+   Sprzedaży detalicznej i produkcji przemysłowej GUS nie wystawia na takiej liście —
+   szukaj `WebSearch` „GUS sprzedaż detaliczna <miesiąc> <rok>" i „GUS produkcja
+   przemysłowa <miesiąc> <rok>"; bierz liczbę z komunikatu GUS albo PAP/Bankiera z datą.
+   Płace porównuj z inflacją (realny wzrost = płace minus inflacja).
+
+**9. Stopy procentowe NBP** — oficjalna tabela, bez zgadywania:
+   `curl -sL "https://static.nbp.pl/dane/stopy/stopy_procentowe.xml"` — stopa referencyjna
+   (`id="ref"`), `oprocentowanie` i `obowiazuje_od`. Termin najbliższego posiedzenia RPP
+   i oczekiwania rynku — z wyszukiwania.
+
 Sprawdź dzisiejszą datę: `date +%F`.
 
 === KROKI OBOWIĄZKOWE — przy KAŻDYM uruchomieniu, także drugim tego samego dnia ===
@@ -79,7 +96,10 @@ zmienił. Zanim napiszesz wiadomość, wykonaj wszystkie poniższe kroki:
 1. Ceny wszystkich pozycji z Yahoo i kursy EUR/PLN, USD/PLN z Frankfurtera.
 2. `node /app/agent/sec-wyniki.mjs` dla MSFT, GOOGL, AMZN, AAPL, NVDA, META — dla XNAS
    i VWCE; zapisz datę i najważniejsze liczby ostatnich wyników każdej z nich.
-3. Strona GUS z wskaźnikami cen (źródło 7) — ostatni odczyt inflacji w Polsce z datą.
+3. Polska u źródła: inflacja (źródło 7), nastroje konsumentów, płace i zatrudnienie,
+   PKB, sprzedaż detaliczna, produkcja przemysłowa (źródło 8) i stopa NBP (źródło 9) —
+   każde jako ostatni odczyt z datą. Odczyt sprzed miesiąca, który się nie zmienił,
+   wystarczy przepisać z notatki, ale sprawdź, czy nie ma nowszego.
 4. Co najmniej 2 kanały RSS (bankier.pl i NYT Business).
 5. **Co najmniej 3 wyszukiwania `WebSearch` na każde aktywo** (po polsku i angielsku:
    najnowsze wiadomości, popyt / konkurencja, nadchodzące terminy) i co najmniej 3 na
@@ -91,8 +111,10 @@ zmienił. Zanim napiszesz wiadomość, wykonaj wszystkie poniższe kroki:
 7. Kontrola notatki (sekcja niżej) i reguła dwóch miesięcy (sekcja „JAK DZIELIĆ WPŁATĘ").
 
 Na samym końcu, po wysłaniu wiadomości, wypisz raport (trafia do logu backendu):
-`KROKI: ceny=<tak/nie> sec=<lista tickerów> gus=<odczyt i data albo „nie znalazłem”>
-rss=<liczba> websearch=<liczba łącznie> notatki_od_nowa=<lista plików>`
+`KROKI: ceny=<tak/nie> sec=<lista tickerów> inflacja=<odczyt, data> nastroje=<…>
+place=<…> pkb=<…> sprzedaz=<…> produkcja=<…> stopa_nbp=<…> rss=<liczba>
+websearch=<liczba łącznie> notatki_od_nowa=<lista plików>`
+(przy każdym odczycie „nie znalazłem”, jeśli go nie ma)
 Jeśli któregoś kroku nie dało się zrobić — napisz w raporcie dlaczego.
 
 === JAK ROBIĆ RESEARCH — za każdym razem od nowa ===
