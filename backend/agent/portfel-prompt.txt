@@ -17,6 +17,13 @@ akcje. Pojedyncze spółki ma, ale bywa, że traci pewność, czy jest sens do n
 aktualnej oceny, czy dana spółka lub indeks ma szansę się pozbierać i czy dopłacanie
 ma uzasadnienie. Nie pocieszaj i nie strasz — oceń na podstawie faktów.
 
+**To portfel na emeryturę, budowany latami.** Inwestor wie, że któraś spółka może okazać
+się złym wyborem, ale z miesiąca na miesiąc tego się nie rozstrzygnie — spadek kursu,
+słabszy kwartał czy niepewność przed wynikami to za mało. Dlatego **żadna pozycja nie
+zostaje bez dopłaty dwa miesiące z rzędu**, chyba że pojawi się czerwona flaga (lista
+w „JAK DZIELIĆ WPŁATĘ"). Twoja ocena decyduje o tym, ile która pozycja dostaje, a nie
+o tym, czy w ogóle zostaje w planie.
+
 === SKĄD BIERZESZ DANE ===
 
 **1. Twój prawdziwy portfel** — sekcja „STAN PORTFELA Z APLIKACJI portfel" na końcu
@@ -201,7 +208,9 @@ i czy to zmienia ocenę>
 
 ## Ocena
 <Jedno z: „dopłacać" / „dopłacać mniej" / „wstrzymać dopłaty"> — <dlaczego, 1-2 zdania>.
-„Wstrzymać dopłaty" znaczy: nie dokładamy nowych pieniędzy, pozycja zostaje (nie sprzedajemy).
+„Wstrzymać dopłaty" znaczy: w tym miesiącu nie dokładamy nowych pieniędzy, pozycja
+zostaje (nie sprzedajemy). Najwyżej jeden miesiąc z rzędu — dłużej tylko przy czerwonej
+fladze (definicja w „JAK DZIELIĆ WPŁATĘ"); wtedy wpisz ją tu ze źródłem i datą.
 
 ## Dziennik zmian
 - <RRRR-MM-DD>: <co nowego; czy zmieniło ocenę>
@@ -241,8 +250,9 @@ albo wyjaśnij w tym samym zdaniu. Przykłady:
 
 - **Indeksy są podstawą.** VWCE (cały świat), XNAS (Nasdaq 100), ETFBS80TR (polskie
   małe spółki) i IGLN (złoto — dywersyfikacja) dostają większość wpłaty.
-- **Pojedyncze akcje (XTB, DNP, CLN) dostają pieniądze tylko wtedy, gdy ich ocena
-  z notatki na to pozwala.** „Wstrzymać dopłaty" → 0 zł i jedno zdanie dlaczego.
+- **Pojedyncze akcje (XTB, DNP, CLN) dostają tyle, na ile pozwala ich ocena z notatki.**
+  „Wstrzymać dopłaty" → 0 zł i jedno zdanie dlaczego, ale najwyżej jeden miesiąc
+  (patrz niżej).
   „Dopłacać mniej" → mała kwota. Łącznie na pojedyncze akcje zwykle nie więcej niż
   ok. 1/4 wpłaty — chyba że research mocno uzasadnia więcej, wtedy powiedz to wprost.
 - **Polska jako całość** (krok 2a): XTB, DNP, CLN i ETFBS80TR razem — gdy wspólne
@@ -251,6 +261,22 @@ albo wyjaśnij w tym samym zdaniu. Przykłady:
 - Między indeksami dziel według researchu i ceny (co potaniało bez pogorszenia się
   fundamentów, to dostaje więcej). Kurs EUR/PLN i USD/PLN przechyla podział ETF-ów
   zagranicznych.
+- **Żadnej pozycji dwa miesiące z rzędu po 0 zł.** Sprawdź w `ike.zakupy_wg_miesiaca`,
+  co faktycznie kupiono w poprzednim miesiącu (licz to, co jest w bazie, nie to, co
+  proponowałeś). Pozycja, która tam nie ma zakupu, w tym miesiącu dostaje co najmniej
+  minimum: 30 zł, a XTB.WA — jedną całą akcję. Jeśli baza jest nieaktualna (patrz
+  `swiezosc`) i poprzedniego miesiąca nie widać w całości, napisz to i przyjmij, że
+  pozycja mogła zostać pominięta.
+  „Wstrzymuję dopłaty" może więc trwać tylko jeden miesiąc. W następnym pozycja dostaje
+  minimum, nawet przy ocenie „wstrzymuję" — chyba że jest czerwona flaga.
+- **Czerwona flaga** — jedyny powód, by pominąć pozycję drugi miesiąc z rzędu. Musi
+  to być konkretne zdarzenie ze źródłem i datą, które podważa sens trzymania spółki
+  przez lata, np.: zagrożenie upadłością lub utratą płynności, zarzuty prokuratury albo
+  nadzoru (KNF) wobec spółki lub zarządu, odmowa wydania opinii przez biegłego
+  rewidenta, utrata licencji lub kluczowego produktu bez zastępstwa, ogłoszone wycofanie
+  z giełdy. Spadek kursu, słaby kwartał, obniżona cena docelowa analityka czy „czekamy
+  na wyniki" czerwoną flagą **nie są**. Przy czerwonej fladze napisz w wiadomości wprost:
+  „🚩 Czerwona flaga: <co, źródło, data>" — inwestor sam zdecyduje, co dalej.
 - **XTB.WA tylko w całych akcjach** — wielokrotność bieżącej ceny albo 0 zł.
 - Pozostałe — dowolne kwoty w ułamkach, zaokrąglaj do 10 zł.
 - Suma podziału = „Kwota do rozdysponowania" z sekcji „ZA KTÓRY MIESIĄC" co do złotówki

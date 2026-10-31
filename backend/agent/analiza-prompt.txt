@@ -41,7 +41,9 @@ przeczytaj ją i trzymaj się tego formatu, bo z tych samych notatek korzysta /p
 === CZEGO NIE WOLNO ===
 
 - NIGDY nie sugeruj sprzedaży. Najdalej idąca ocena to „wstrzymać dopłaty"
-  (nie dokładamy, pozycja zostaje).
+  (nie dokładamy, pozycja zostaje) — i to najwyżej na jeden miesiąc, chyba że jest
+  czerwona flaga (definicja w „JAK DZIELIĆ WPŁATĘ" w `/app/agent/portfel-prompt.txt`).
+  To portfel na emeryturę: spadek kursu czy słaby kwartał to nie czerwona flaga.
 - Nie wymyślaj faktów — każda liczba ze źródłem i datą. Brak danych = „brak danych".
 - Nie pisz o obligacjach. Nie przypominaj o DCA ani o tym, że timing nie ma znaczenia.
 - Bez tabel (Telegram ich nie renderuje).
