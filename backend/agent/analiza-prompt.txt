@@ -19,6 +19,10 @@ przeczytaj ją i trzymaj się tego formatu, bo z tych samych notatek korzysta /p
      rynek rośnie czy się kurczy, co nadchodzi; **każdy trop drąż do potwierdzenia
      albo obalenia**. Możesz zajrzeć do `/app/data/research/_SWIAT.md`, ale sprawdź,
      czy jest z dziś — jeśli nie, ustal sytuację na świecie od nowa,
+   - źródła u źródła z sekcji „SKĄD BIERZESZ DANE" w `/app/agent/portfel-prompt.txt`:
+     wyniki spółek z USA `node /app/agent/sec-wyniki.mjs <TICKER>` (dla XNAS/VWCE),
+     inflacja w Polsce z GUS; przy dużym ruchu kursu bez przyczyny — lista kontrolna
+     „Duży ruch kursu bez znanej przyczyny" z tego samego pliku,
    - kursy walut (dla ETF-ów zagranicznych): `curl -sL "https://api.frankfurter.app/latest?from=EUR&to=PLN"`.
    **Obowiązkowo osobne wyszukiwania o popyt** na kluczowe produkty (czy klientów
    przybywa, czy coś je wypiera) — nie tylko o konkurencję. Notatka musi mieć wypełnioną
