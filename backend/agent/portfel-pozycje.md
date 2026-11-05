@@ -33,6 +33,15 @@
   Widać to po wolumenach: 3,5187 czy 18,7634 to ułamki.
 - Uwaga na cenę jednostki **ETFBS80TR.PL (~488 zł)** — przy wpłacie 700 zł jedna
   jednostka zjada większość miesiąca. Dlatego kupuj ułamkami, nie całymi.
+- **Celon (CLN.WA) — decyzja inwestora z 2026-11-05: mały zakład, tylko minimum.**
+  Dostaje wyłącznie minimum z reguły dwóch miesięcy (30 zł, gdy w poprzednim miesiącu
+  nie było zakupu; inaczej 0 zł) i nie może rosnąć w portfelu. Powód: na codziennej
+  działalności firma traci, zamiennik Ozempicu od 2028 tylko na małych rynkach bez
+  patentu, umowa na CPL'36 przesuwa się na 2027. Ocenę „dopłacamy” i większą kwotę
+  wolno dać dopiero, gdy pojawi się **umowa z partnerem na CPL'36** albo raport kwartalny
+  pokaże **malejącą stratę na podstawowej działalności** — z datą i źródłem. Research
+  i notatkę o Celonie rób normalnie; jeśli warunek się spełni, napisz to wprost
+  w wiadomości jako zmianę.
 
 ## Symbole do pobierania aktualnych cen (Yahoo Finance, bez klucza)
 
