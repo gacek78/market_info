@@ -186,8 +186,17 @@ zanim napiszesz „przyczyny nie znaleziono":
    wszystkich spółek: `node /app/agent/fetch-feed.mjs https://www.bankier.pl/rss/espi.xml`.
 3. Zmiana składu indeksu (spółka wypada z WIG20/mWIG40/sWIG80 albo do niego wchodzi —
    fundusze muszą wtedy sprzedać lub kupić), nowa rekomendacja domu maklerskiego.
-4. Wiadomości o konkurencji i branży z tego tygodnia.
+4. Wiadomości o konkurencji i branży z tego tygodnia — **także zagranicznej**. Spółki
+   z tej samej branży za granicą (dla XTB: IG Group, Plus500, eToro) — czy spadły w ostatnich
+   tygodniach i dlaczego. Ostrzeżenie jednej firmy potrafi przecenić całą branżę.
+5. Czy kurs przebił poziom, przy którym długo się trzymał. Z danych dziennych Yahoo
+   (`interval=1d&range=3mo`) sprawdź, czy przez ostatnie tygodnie kurs chodził w wąskim
+   przedziale i w którym dniu z niego wypadł (przy jakim obrocie wobec zwykłego). Wypadnięcie
+   z przedziału uruchamia falę sprzedaży — to przyczyna mechaniczna, nie nowa wiadomość;
+   napisz ją wprost: „2.11 kurs spadł poniżej 134 zł, przy którym trzymał się od miesiąca,
+   przy obrocie 2× wyższym niż zwykle”. Poziomy z komentarzy giełdowych (np. Stockwatch) też.
 Dopiero gdy żadne nie pasuje, napisz, co sprawdziłeś i że przyczyna jest nieznana.
+Zwykle przyczyn jest kilka naraz — wymień wszystkie potwierdzone, nie tylko jedną.
 
 **Uczciwość:** szukaj też faktów przeciwnych do własnej oceny. Gdy coś jest gorsze,
 niż było, ale lepsze niż rok temu (albo odwrotnie) — napisz obie rzeczy.
@@ -266,8 +275,13 @@ Pisz notatki uczciwie: gdy nie masz danych, napisz „brak danych", nie zgaduj.
 **Kontrola notatki** — przy każdym uruchomieniu, także przy krótkim sprawdzeniu,
 przejrzyj każdą notatkę i popraw (poprawkę odnotuj w dzienniku zmian):
 - sprzeczności wewnątrz notatki (np. „deflacja żywności" i „inflacja żywności +2,7%"
-  w jednej notatce — ustal, która liczba jest prawdziwa i czego dotyczy, albo napisz,
-  że źródła się różnią),
+  w jednej notatce) — **rozstrzygnij, nie zapisuj obu liczb obok siebie.** Najczęściej
+  obie są prawdziwe, tylko mierzą co innego: zysk netto a wynik na podstawowej działalności,
+  jeden kwartał a kilka kwartałów razem, z jednorazowym zdarzeniem i bez niego, różne
+  okresy. Znajdź raport spółki albo urzędu i napisz, czym się różnią, np. „zysk netto
+  +128 mln zł to jednorazowe przeszacowanie udziałów w Novohale (169 mln zł); na
+  podstawowej działalności strata −15 mln zł”. „Źródła się różnią” wolno napisać dopiero
+  wtedy, gdy po sprawdzeniu raportu u źródła dalej nie wiesz, i z tym, co sprawdziłeś,
 - cena docelowa analityka prawie równa dzisiejszemu kursowi to podejrzany zbieg
   okoliczności — sprawdź ją w drugim źródle (np. bankier.pl/gielda/rekomendacje),
 - każda liczba, na której opierasz ocenę, musi mieć źródło i datę,
