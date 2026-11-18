@@ -25,7 +25,7 @@ export const CENA_ZL_ZA_MLN_TOKENOW_WE = 1.86;
 // ─── Domyślna strategia inwestora (edytowalna w UI, trzymana w state.json) ────
 export const DEFAULT_STRATEGY =
   'IKE = konto emerytalne, horyzont kilkanaście lat. TYLKO KUPUJĘ — nie sprzedaję nic, ' +
-  'nigdy, niezależnie od sytuacji rynkowej. Co miesiąc wpłacam 700 zł metodą DCA i muszę ' +
+  'nigdy, niezależnie od sytuacji rynkowej. Co miesiąc wpłacam 800 zł metodą DCA i muszę ' +
   'kupić coś ze stałego zestawu nawet wtedy, gdy nie ma żadnego dobrego sygnału — ' +
   'pominięcie miesiąca nie wchodzi w grę. Wiem, że w tym horyzoncie wyszukiwanie idealnych ' +
   'momentów ma niewielkie znaczenie; zależy mi na tym, żeby wpłatę skierować tam, gdzie ' +
@@ -34,9 +34,9 @@ export const DEFAULT_STRATEGY =
 
 /**
  * Miesięczna wpłata DCA w złotych. Podsumowanie dzieli TĘ kwotę między aktywa —
- * bez niej model dawałby ogólniki zamiast konkretnej propozycji „gdzie te 700 zł".
+ * bez niej model dawałby ogólniki zamiast konkretnej propozycji „gdzie te 800 zł".
  */
-export const DCA_BUDGET_PLN = Number(process.env.DCA_BUDGET_PLN ?? 700);
+export const DCA_BUDGET_PLN = Number(process.env.DCA_BUDGET_PLN ?? 800);
 
 export const TRACKED_ETFS: ETF[] = [
   { ticker: 'XNAS.DE', name: 'iShares Nasdaq 100 UCITS ETF', category: 'Technologia USA', description: '100 największych spółek tech z Nasdaq.' },

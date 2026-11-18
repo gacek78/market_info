@@ -31,7 +31,7 @@
   akcji i po jakiej cenie, np. „150 zł = 1 akcja po ok. 150 zł".
 - **Pozostałe pozycje można kupować w częściach** (ułamki jednostek) — dowolna kwota.
   Widać to po wolumenach: 3,5187 czy 18,7634 to ułamki.
-- Uwaga na cenę jednostki **ETFBS80TR.PL (~488 zł)** — przy wpłacie 700 zł jedna
+- Uwaga na cenę jednostki **ETFBS80TR.PL (~488 zł)** — przy wpłacie 800 zł jedna
   jednostka zjada większość miesiąca. Dlatego kupuj ułamkami, nie całymi.
 - **Celon (CLN.WA) — decyzja inwestora z 2026-11-05: mały zakład, tylko minimum.**
   Dostaje wyłącznie minimum z reguły dwóch miesięcy (30 zł, gdy w poprzednim miesiącu

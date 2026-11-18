@@ -59,7 +59,7 @@ function isLastDayOfMonth(d: Date): boolean {
   return t.getDate() === 1;
 }
 // Ile wydano w IKE w danym miesiącu i ile wynosi budżet (z aplikacji portfel).
-const budzet = (stan: PortfelStan | null) => stan?.ike?.budzet_miesieczny_pln || Number(process.env.DCA_BUDGET_PLN || 700);
+const budzet = (stan: PortfelStan | null) => stan?.ike?.budzet_miesieczny_pln || Number(process.env.DCA_BUDGET_PLN || 800);
 const wydano = (stan: PortfelStan | null, d: Date) => stan?.ike?.zakupy_wg_miesiaca?.[monthKey(d)]?.kwota_pln || 0;
 // Miesiąc jest kupiony, gdy z budżetu zostało mniej niż RESZTA_MIN (drobna reszta z zaokrągleń)
 // albo gdy trwa jego ostatni dzień (czas polski — TZ w compose). Jeden zakup to za mało —
