@@ -290,7 +290,10 @@ app.get('/health', (_req: Request, res: Response) => {
 // ALERT_CRON może zawierać KILKA wyrażeń rozdzielonych ';' — np. "0 5 * * *;15 14 * * *"
 // (skan o 5:00 ORAZ 14:15). Jednym wyrażeniem cron nie da się tego zapisać.
 const ALERT_CRON = process.env.ALERT_CRON || '0 8 * * *'; // domyślnie 8:00 codziennie
-if (isTelegramConfigured()) {
+if (ALERT_CRON.trim() === 'off') {
+  // Od 18.11.2026 wyłączony: sygnały bez walidacji były w większości szumem, rolę przejął /portfel.
+  console.log('[Scheduler] Skan rynku: harmonogram wyłączony (ALERT_CRON=off).');
+} else if (isTelegramConfigured()) {
   const expressions = ALERT_CRON.split(';').map((e) => e.trim()).filter(Boolean);
   const scheduled: string[] = [];
   for (const expr of expressions) {
